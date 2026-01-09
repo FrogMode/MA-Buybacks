@@ -42,17 +42,17 @@ export function StatsCards() {
         return (
           <div
             key={index}
-            className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-6 hover:border-gray-600 transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/10"
+            className="bg-movement-dark-800/60 backdrop-blur-sm border border-movement-teal-500/20 rounded-xl p-6 hover:border-movement-teal-500/40 transition-all duration-300 hover:shadow-lg hover:shadow-movement-teal-500/20 group"
           >
             <div className="flex items-start justify-between mb-4">
-              <div className="p-2 bg-gradient-to-br from-blue-500/20 to-purple-600/20 rounded-lg">
-                <Icon className="w-5 h-5 text-blue-400" />
+              <div className="p-2 bg-gradient-to-br from-movement-teal-500/20 to-movement-yellow-500/20 rounded-lg group-hover:from-movement-teal-500/30 group-hover:to-movement-yellow-500/30 transition-all">
+                <Icon className="w-5 h-5 text-movement-teal-400" />
               </div>
               {stat.trend !== "neutral" && (
                 <span
                   className={`text-xs px-2 py-1 rounded-full ${
                     stat.trend === "up"
-                      ? "bg-green-500/20 text-green-400"
+                      ? "bg-movement-teal-500/20 text-movement-teal-400"
                       : "bg-red-500/20 text-red-400"
                   }`}
                 >
@@ -60,10 +60,10 @@ export function StatsCards() {
                 </span>
               )}
             </div>
-            <h3 className="text-gray-400 text-sm mb-1">{stat.title}</h3>
+            <h3 className="text-movement-dark-300 text-sm mb-1">{stat.title}</h3>
             <p className="text-2xl font-bold text-white">{stat.value}</p>
             {stat.trend === "neutral" && (
-              <p className="text-xs text-gray-500 mt-1">{stat.change}</p>
+              <p className="text-xs text-movement-dark-400 mt-1">{stat.change}</p>
             )}
           </div>
         );

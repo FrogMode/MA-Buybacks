@@ -12,15 +12,15 @@ export default async function Home() {
   const tokenData = tokenDataResponse.error ? null : tokenDataResponse.data;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-movement-dark-900 via-movement-dark-800 to-movement-dark-900">
       <Header tokenData={tokenData || undefined} />
 
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">
+          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-movement-teal-400 via-movement-teal-500 to-movement-yellow-500 bg-clip-text text-transparent mb-3">
             $MOVE Token Buyback Tracker
           </h1>
-          <p className="text-gray-400">
+          <p className="text-movement-dark-200 text-lg">
             Real-time monitoring of $MOVE token buyback activity onchain
           </p>
         </div>
@@ -28,8 +28,8 @@ export default async function Home() {
         {tokenData && <TokenInfo data={tokenData} />}
 
         {tokenDataResponse.error && (
-          <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-4 mb-8">
-            <p className="text-yellow-400 text-sm">
+          <div className="bg-movement-yellow-500/10 border border-movement-yellow-500/50 rounded-lg p-4 mb-8">
+            <p className="text-movement-yellow-400 text-sm">
               Unable to fetch token data: {tokenDataResponse.error}
             </p>
           </div>

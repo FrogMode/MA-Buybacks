@@ -19,12 +19,12 @@ export function BuybackChart() {
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 shadow-xl">
-          <p className="text-gray-300 text-sm mb-2">{payload[0].payload.date}</p>
-          <p className="text-blue-400 text-sm">
+        <div className="bg-movement-dark-800 border border-movement-teal-500/30 rounded-lg p-3 shadow-xl backdrop-blur-sm">
+          <p className="text-movement-dark-200 text-sm mb-2">{payload[0].payload.date}</p>
+          <p className="text-movement-teal-400 text-sm font-medium">
             Tokens: {payload[0].value.toLocaleString()}
           </p>
-          <p className="text-purple-400 text-sm">
+          <p className="text-movement-yellow-400 text-sm font-medium">
             Value: ${payload[1].value.toLocaleString()}
           </p>
         </div>
@@ -34,10 +34,10 @@ export function BuybackChart() {
   };
 
   return (
-    <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-6">
+    <div className="bg-movement-dark-800/60 backdrop-blur-sm border border-movement-teal-500/20 rounded-xl p-6 shadow-lg shadow-movement-teal-500/5">
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-white mb-1">Buyback Activity</h2>
-        <p className="text-gray-400 text-sm">Historical buyback trends over time</p>
+        <p className="text-movement-dark-300 text-sm">Historical buyback trends over time</p>
       </div>
 
       <div className="h-[400px] w-full">
@@ -45,22 +45,22 @@ export function BuybackChart() {
           <AreaChart data={data}>
             <defs>
               <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                <stop offset="5%" stopColor="#00D9C0" stopOpacity={0.4} />
+                <stop offset="95%" stopColor="#00D9C0" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
+                <stop offset="5%" stopColor="#FFC700" stopOpacity={0.4} />
+                <stop offset="95%" stopColor="#FFC700" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#2D3750" opacity={0.3} />
             <XAxis
               dataKey="date"
-              stroke="#9ca3af"
+              stroke="#7F8799"
               style={{ fontSize: '12px' }}
             />
             <YAxis
-              stroke="#9ca3af"
+              stroke="#7F8799"
               style={{ fontSize: '12px' }}
             />
             <Tooltip content={<CustomTooltip />} />
@@ -71,7 +71,7 @@ export function BuybackChart() {
             <Area
               type="monotone"
               dataKey="amount"
-              stroke="#3b82f6"
+              stroke="#00D9C0"
               strokeWidth={2}
               fillOpacity={1}
               fill="url(#colorAmount)"
@@ -80,7 +80,7 @@ export function BuybackChart() {
             <Area
               type="monotone"
               dataKey="value"
-              stroke="#a855f7"
+              stroke="#FFC700"
               strokeWidth={2}
               fillOpacity={1}
               fill="url(#colorValue)"

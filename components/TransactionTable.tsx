@@ -69,35 +69,35 @@ export function TransactionTable() {
   };
 
   return (
-    <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-6">
+    <div className="bg-movement-dark-800/60 backdrop-blur-sm border border-movement-teal-500/20 rounded-xl p-6 shadow-lg shadow-movement-teal-500/5">
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-white mb-1">Recent Transactions</h2>
-        <p className="text-gray-400 text-sm">Latest buyback transactions onchain</p>
+        <p className="text-movement-dark-300 text-sm">Latest buyback transactions onchain</p>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-gray-700">
-              <th className="text-left py-3 px-4 text-gray-400 font-medium text-sm">
+            <tr className="border-b border-movement-teal-500/20">
+              <th className="text-left py-3 px-4 text-movement-dark-300 font-medium text-sm">
                 Transaction Hash
               </th>
-              <th className="text-left py-3 px-4 text-gray-400 font-medium text-sm">
+              <th className="text-left py-3 px-4 text-movement-dark-300 font-medium text-sm">
                 Time
               </th>
-              <th className="text-right py-3 px-4 text-gray-400 font-medium text-sm">
+              <th className="text-right py-3 px-4 text-movement-dark-300 font-medium text-sm">
                 Tokens
               </th>
-              <th className="text-right py-3 px-4 text-gray-400 font-medium text-sm">
+              <th className="text-right py-3 px-4 text-movement-dark-300 font-medium text-sm">
                 Value (USD)
               </th>
-              <th className="text-right py-3 px-4 text-gray-400 font-medium text-sm">
+              <th className="text-right py-3 px-4 text-movement-dark-300 font-medium text-sm">
                 Price
               </th>
-              <th className="text-center py-3 px-4 text-gray-400 font-medium text-sm">
+              <th className="text-center py-3 px-4 text-movement-dark-300 font-medium text-sm">
                 Status
               </th>
-              <th className="text-center py-3 px-4 text-gray-400 font-medium text-sm">
+              <th className="text-center py-3 px-4 text-movement-dark-300 font-medium text-sm">
                 Explorer
               </th>
             </tr>
@@ -106,14 +106,14 @@ export function TransactionTable() {
             {transactions.map((tx, index) => (
               <tr
                 key={tx.hash}
-                className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors"
+                className="border-b border-movement-dark-700/50 hover:bg-movement-teal-500/5 transition-colors"
               >
                 <td className="py-4 px-4">
-                  <code className="text-blue-400 text-sm font-mono">
+                  <code className="text-movement-teal-400 text-sm font-mono">
                     {formatHash(tx.hash)}
                   </code>
                 </td>
-                <td className="py-4 px-4 text-gray-300 text-sm">
+                <td className="py-4 px-4 text-movement-dark-200 text-sm">
                   {getTimeAgo(tx.timestamp)}
                 </td>
                 <td className="py-4 px-4 text-right text-white font-medium">
@@ -122,22 +122,22 @@ export function TransactionTable() {
                 <td className="py-4 px-4 text-right text-white font-medium">
                   ${tx.value.toLocaleString()}
                 </td>
-                <td className="py-4 px-4 text-right text-gray-300">
+                <td className="py-4 px-4 text-right text-movement-dark-200">
                   ${tx.price.toFixed(2)}
                 </td>
                 <td className="py-4 px-4 text-center">
                   <span
                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                       tx.status === "confirmed"
-                        ? "bg-green-500/20 text-green-400"
-                        : "bg-yellow-500/20 text-yellow-400"
+                        ? "bg-movement-teal-500/20 text-movement-teal-400 border border-movement-teal-500/30"
+                        : "bg-movement-yellow-500/20 text-movement-yellow-400 border border-movement-yellow-500/30"
                     }`}
                   >
                     {tx.status}
                   </span>
                 </td>
                 <td className="py-4 px-4 text-center">
-                  <button className="text-gray-400 hover:text-blue-400 transition-colors">
+                  <button className="text-movement-dark-300 hover:text-movement-teal-400 transition-colors">
                     <ExternalLink className="w-4 h-4" />
                   </button>
                 </td>
@@ -148,10 +148,10 @@ export function TransactionTable() {
       </div>
 
       <div className="mt-4 flex items-center justify-between">
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-movement-dark-300">
           Showing {transactions.length} most recent transactions
         </p>
-        <button className="text-sm text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1">
+        <button className="text-sm text-movement-teal-400 hover:text-movement-teal-300 transition-colors flex items-center gap-1 font-medium">
           View All
           <ArrowUpRight className="w-4 h-4" />
         </button>
