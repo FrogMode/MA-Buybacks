@@ -4,6 +4,8 @@ A real-time dashboard for tracking $MOVE token buyback activity onchain.
 
 ## Features
 
+- **Live Token Data**: Real-time $MOVE token price, market cap, and volume from CoinGecko/CoinMarketCap
+- **Token Information Display**: Shows token logo, price, 24h change, market cap, and circulating supply
 - **Real-time Statistics**: Track total buybacks, token amounts, transaction counts, and recent activity
 - **Interactive Charts**: Visualize buyback trends over time with beautiful area charts
 - **Transaction History**: View detailed information about recent buyback transactions
@@ -26,6 +28,16 @@ A real-time dashboard for tracking $MOVE token buyback activity onchain.
 ```bash
 npm install
 ```
+
+### Configuration
+
+The app uses CoinGecko by default (no API key required). To use CoinMarketCap instead:
+
+1. Get a free API key from [CoinMarketCap](https://coinmarketcap.com/api/)
+2. Create a `.env.local` file:
+   ```bash
+   COINMARKETCAP_API_KEY=your_api_key_here
+   ```
 
 ### Development
 
@@ -59,19 +71,40 @@ npm start
 │   ├── page.tsx         # Main dashboard page
 │   └── globals.css      # Global styles and Tailwind directives
 ├── components/
-│   ├── Header.tsx       # Navigation header
+│   ├── Header.tsx       # Navigation header with token info
+│   ├── TokenInfo.tsx    # Token market data display
 │   ├── StatsCards.tsx   # Statistics cards component
 │   ├── BuybackChart.tsx # Buyback trends chart
 │   └── TransactionTable.tsx # Transaction history table
+├── lib/
+│   ├── tokenData.ts     # Token market data service (CoinGecko/CMC)
+│   └── api.ts           # Buyback API service (placeholder)
+├── types/
+│   └── index.ts         # TypeScript interfaces
 ├── package.json
 ├── tsconfig.json
 ├── tailwind.config.ts
 └── next.config.js
 ```
 
-## API Integration (Coming Soon)
+## Token Market Data
 
-The current implementation uses mock data for demonstration purposes. To integrate with your API:
+The application automatically fetches live $MOVE token data from:
+- **CoinGecko API** (default, no API key required)
+- **CoinMarketCap API** (optional, requires API key)
+
+Data includes:
+- Current price and 24h change
+- Market capitalization
+- Trading volume
+- Circulating supply
+- Token logo
+
+Data is cached for 60 seconds and automatically revalidated.
+
+## Buyback API Integration
+
+The buyback tracking currently uses mock data for demonstration. To integrate with your API:
 
 1. Create an API service file (e.g., `lib/api.ts`)
 2. Replace mock data in components with API calls

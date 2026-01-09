@@ -33,3 +33,19 @@ export interface APIResponse<T> {
   error?: string;
   timestamp: number;
 }
+
+export interface TokenMarketData {
+  symbol: string;
+  name: string;
+  price: number;
+  priceChange24h: number;
+  priceChangePercentage24h: number;
+  marketCap: number;
+  marketCapRank?: number;
+  volume24h: number;
+  circulatingSupply: number;
+  totalSupply?: number;
+  maxSupply?: number;
+  logoUrl?: string;
+  lastUpdated: Date;
+}
