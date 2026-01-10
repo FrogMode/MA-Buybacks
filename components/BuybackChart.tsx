@@ -19,13 +19,13 @@ export function BuybackChart() {
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 shadow-xl">
-          <p className="text-gray-300 text-sm mb-2">{payload[0].payload.date}</p>
-          <p className="text-blue-400 text-sm">
-            Tokens: {payload[0].value.toLocaleString()}
+        <div className="glass rounded-xl p-4 shadow-2xl">
+          <p className="text-white font-medium mb-2">{payload[0].payload.date}</p>
+          <p className="text-movement-yellow text-sm">
+            Tokens: <span className="font-semibold">{payload[0].value.toLocaleString()}</span>
           </p>
-          <p className="text-purple-400 text-sm">
-            Value: ${payload[1].value.toLocaleString()}
+          <p className="text-white/60 text-sm">
+            Value: <span className="font-semibold">${payload[1].value.toLocaleString()}</span>
           </p>
         </div>
       );
@@ -34,44 +34,51 @@ export function BuybackChart() {
   };
 
   return (
-    <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-6">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-white mb-1">Buyback Activity</h2>
-        <p className="text-gray-400 text-sm">Historical buyback trends over time</p>
+    <div className="glass rounded-xl p-4">
+      <div className="mb-4">
+        <h2 className="text-lg font-bold text-white">Buyback Activity</h2>
+        <p className="text-white/50 text-xs">Historical buyback trends over time</p>
       </div>
 
-      <div className="h-[400px] w-full">
+      <div className="h-[280px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data}>
             <defs>
               <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                <stop offset="5%" stopColor="#FFDA00" stopOpacity={0.3} />
+                <stop offset="50%" stopColor="#FFDA00" stopOpacity={0.1} />
+                <stop offset="95%" stopColor="#FFDA00" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
+                <stop offset="5%" stopColor="#ffffff" stopOpacity={0.15} />
+                <stop offset="50%" stopColor="#ffffff" stopOpacity={0.05} />
+                <stop offset="95%" stopColor="#ffffff" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
             <XAxis
               dataKey="date"
-              stroke="#9ca3af"
+              stroke="rgba(255,255,255,0.3)"
               style={{ fontSize: '12px' }}
+              tickLine={false}
+              axisLine={false}
             />
             <YAxis
-              stroke="#9ca3af"
+              stroke="rgba(255,255,255,0.3)"
               style={{ fontSize: '12px' }}
+              tickLine={false}
+              axisLine={false}
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend
               wrapperStyle={{ paddingTop: '20px' }}
               iconType="line"
+              formatter={(value) => <span className="text-white/70 text-sm">{value}</span>}
             />
             <Area
               type="monotone"
               dataKey="amount"
-              stroke="#3b82f6"
+              stroke="#FFDA00"
               strokeWidth={2}
               fillOpacity={1}
               fill="url(#colorAmount)"
@@ -80,7 +87,7 @@ export function BuybackChart() {
             <Area
               type="monotone"
               dataKey="value"
-              stroke="#a855f7"
+              stroke="rgba(255,255,255,0.5)"
               strokeWidth={2}
               fillOpacity={1}
               fill="url(#colorValue)"

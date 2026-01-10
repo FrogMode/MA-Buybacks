@@ -15,12 +15,12 @@ export function Header({ tokenData }: HeaderProps) {
     : null;
 
   return (
-    <header className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm sticky top-0 z-50">
+    <header className="glass-subtle sticky top-0 z-50 border-b border-white/5">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {tokenData?.logoUrl ? (
-              <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-gray-800">
+              <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-white/5 ring-1 ring-white/10">
                 <Image
                   src={tokenData.logoUrl}
                   alt="MOVE logo"
@@ -30,21 +30,21 @@ export function Header({ tokenData }: HeaderProps) {
                 />
               </div>
             ) : (
-              <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-2 rounded-lg">
-                <TrendingUp className="w-6 h-6 text-white" />
+              <div className="bg-movement-yellow/90 p-2 rounded-xl shadow-lg shadow-movement-yellow/20">
+                <TrendingUp className="w-6 h-6 text-black" />
               </div>
             )}
             <div>
-              <h2 className="text-xl font-bold text-white">$MOVE Buyback</h2>
-              <p className="text-xs text-gray-400">Onchain Tracker</p>
+              <h2 className="text-xl font-bold text-white">Move Alliance</h2>
+              <p className="text-xs text-white/50">Buyback Tracker</p>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
             {tokenData && (
-              <div className="hidden lg:flex items-center gap-3 px-4 py-2 bg-gray-800/50 rounded-lg">
+              <div className="hidden lg:flex items-center gap-3 px-4 py-2 glass rounded-xl">
                 <div>
-                  <p className="text-xs text-gray-400">Price</p>
+                  <p className="text-xs text-white/50">Price</p>
                   <p className="text-sm font-semibold text-white">
                     {formatPrice(tokenData.price)}
                   </p>
@@ -53,10 +53,10 @@ export function Header({ tokenData }: HeaderProps) {
                   <span
                     className={`text-xs font-medium ${
                       priceChange.color === "green"
-                        ? "text-green-400"
+                        ? "text-emerald-400"
                         : priceChange.color === "red"
                         ? "text-red-400"
-                        : "text-gray-400"
+                        : "text-white/50"
                     }`}
                   >
                     {priceChange.text}
@@ -64,9 +64,9 @@ export function Header({ tokenData }: HeaderProps) {
                 )}
               </div>
             )}
-            <div className="hidden md:flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm text-gray-400">Live</span>
+            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shadow-lg shadow-emerald-400/50"></div>
+              <span className="text-sm text-emerald-400 font-medium">Live</span>
             </div>
           </div>
         </div>

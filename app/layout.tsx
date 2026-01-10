@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "$MOVE Token Buyback Tracker",
+  title: "Move Alliance Buyback Tracker",
   description: "Track $MOVE token buybacks onchain in real-time",
 };
 
