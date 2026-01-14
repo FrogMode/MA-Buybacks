@@ -5,6 +5,7 @@ import { TokenMarketData } from "@/types";
 import { formatPrice, formatPercentageChange } from "@/lib/tokenData";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { MovementLogoIcon } from "./MovementLogo";
 
 interface HeaderProps {
   tokenData?: TokenMarketData;
@@ -26,9 +27,7 @@ export function Header({ tokenData, activeTab }: HeaderProps) {
           <div className="flex items-center gap-6">
             {/* Movement Logo */}
             <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
-              <div className="w-10 h-10 rounded-xl bg-movement-yellow flex items-center justify-center shadow-lg shadow-movement-yellow/20">
-                <span className="text-black font-bold text-xl font-display">M</span>
-              </div>
+              <MovementLogoIcon className="w-10 h-10" />
               <div className="hidden sm:block">
                 <h2 className="text-xl font-bold text-white font-display tracking-tight">
                   MOVEMENT
