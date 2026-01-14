@@ -16,7 +16,7 @@ export default async function Home() {
     <div className="min-h-screen relative">
       <AnimatedBackground />
       <div className="relative z-10">
-        <Header tokenData={tokenData || undefined} />
+        <Header tokenData={tokenData || undefined} activeTab="tracker" />
 
         <main className="container mx-auto px-4 py-6">
           <div className="mb-6">
