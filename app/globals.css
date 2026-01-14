@@ -7,15 +7,24 @@
   --foreground: #ffffff;
   --movement-yellow: #FFDA00;
   --movement-yellow-light: #FFF4B3;
+  --movement-yellow-dark: #E5C400;
   --glass-bg: rgba(255, 255, 255, 0.03);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-highlight: rgba(255, 255, 255, 0.12);
+  --font-sans: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: var(--font-space-grotesk), var(--font-inter), system-ui, sans-serif;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans);
+}
+
+/* Display font for headings */
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
 }
 
 /* Liquid glass card effect */
@@ -49,7 +58,22 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-/* Gradient background */
+/* Movement-style glass card */
+.glass-movement {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+}
+
+/* Gradient background (fallback when no video) */
 .bg-liquid {
   background:
     radial-gradient(ellipse 80% 50% at 50% -20%, rgba(255, 218, 0, 0.08) 0%, transparent 50%),
@@ -70,6 +94,50 @@ body {
   opacity: 0.015;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
   z-index: 1000;
+}
+
+/* Yellow glow effect */
+.glow-yellow {
+  box-shadow: 0 0 20px rgba(255, 218, 0, 0.2);
+}
+
+/* Movement yellow button glow */
+.glow-movement {
+  box-shadow: 
+    0 0 20px rgba(255, 218, 0, 0.3),
+    0 0 40px rgba(255, 218, 0, 0.1);
+}
+
+/* Text gradient */
+.text-gradient {
+  background: linear-gradient(135deg, #ffffff 0%, rgba(255, 255, 255, 0.7) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Movement yellow text gradient */
+.text-gradient-yellow {
+  background: linear-gradient(135deg, var(--movement-yellow) 0%, var(--movement-yellow-light) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Animated border glow */
+@keyframes border-glow {
+  0%, 100% {
+    border-color: rgba(255, 218, 0, 0.3);
+    box-shadow: 0 0 10px rgba(255, 218, 0, 0.1);
+  }
+  50% {
+    border-color: rgba(255, 218, 0, 0.5);
+    box-shadow: 0 0 20px rgba(255, 218, 0, 0.2);
+  }
+}
+
+.animate-border-glow {
+  animation: border-glow 2s ease-in-out infinite;
 }
 
 @layer utilities {
@@ -97,15 +165,36 @@ body {
   background: rgba(255, 255, 255, 0.15);
 }
 
-/* Yellow glow effect */
-.glow-yellow {
-  box-shadow: 0 0 20px rgba(255, 218, 0, 0.2);
+/* Movement-style input */
+.input-movement {
+  @apply w-full px-4 py-3 rounded-xl text-white transition-all duration-200;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Text gradient */
-.text-gradient {
-  background: linear-gradient(135deg, #ffffff 0%, rgba(255, 255, 255, 0.7) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.input-movement::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.input-movement:focus {
+  outline: none;
+  border-color: var(--movement-yellow);
+  box-shadow: 0 0 0 3px rgba(255, 218, 0, 0.1);
+}
+
+/* Movement-style button */
+.btn-movement {
+  @apply font-semibold py-3 px-6 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  background: var(--movement-yellow);
+  color: black;
+}
+
+.btn-movement:hover:not(:disabled) {
+  background: var(--movement-yellow-light);
+  box-shadow: 0 0 30px rgba(255, 218, 0, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-movement:active:not(:disabled) {
+  transform: translateY(0);
 }

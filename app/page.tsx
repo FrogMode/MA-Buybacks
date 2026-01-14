@@ -3,8 +3,9 @@ import { BuybackChart } from "@/components/BuybackChart";
 import { TransactionTable } from "@/components/TransactionTable";
 import { Header } from "@/components/Header";
 import { TokenInfo } from "@/components/TokenInfo";
-import { AnimatedBackground } from "@/components/AnimatedBackground";
+import { VideoBackground } from "@/components/VideoBackground";
 import { fetchTokenData } from "@/lib/tokenData";
+import { TrendingUp } from "lucide-react";
 
 export const revalidate = 60; // Revalidate every 60 seconds
 
@@ -14,13 +15,13 @@ export default async function Home() {
 
   return (
     <div className="min-h-screen relative">
-      <AnimatedBackground />
+      <VideoBackground />
       <div className="relative z-10">
         <Header tokenData={tokenData || undefined} activeTab="tracker" />
 
         <main className="container mx-auto px-4 py-6">
           <div className="mb-6">
-            <h1 className="text-3xl md:text-4xl font-bold text-white mb-1 text-gradient">
+            <h1 className="text-3xl md:text-4xl font-bold text-white mb-1 text-gradient font-display">
               Move Alliance Buyback Tracker
             </h1>
             <p className="text-white/50">
@@ -31,7 +32,7 @@ export default async function Home() {
           {tokenData && <TokenInfo data={tokenData} />}
 
           {tokenDataResponse.error && (
-            <div className="glass rounded-xl p-4 mb-8 border-movement-yellow/30">
+            <div className="glass-movement rounded-xl p-4 mb-8 border border-movement-yellow/30">
               <p className="text-movement-yellow text-sm">
                 Unable to fetch token data: {tokenDataResponse.error}
               </p>
@@ -56,7 +57,7 @@ export default async function Home() {
                 <div className="bg-movement-yellow p-1.5 rounded-lg shadow-lg shadow-movement-yellow/20">
                   <TrendingUp className="w-4 h-4 text-black" />
                 </div>
-                <span className="font-semibold text-white">Movement Network</span>
+                <span className="font-semibold text-white font-display">Movement Network</span>
               </div>
               <p className="text-white/40 text-sm">
                 Tracking $MOVE buybacks on Movement Network
@@ -66,23 +67,5 @@ export default async function Home() {
         </footer>
       </div>
     </div>
-  );
-}
-
-function TrendingUp({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-      <polyline points="16 7 22 7 22 13" />
-    </svg>
   );
 }

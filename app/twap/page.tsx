@@ -1,5 +1,5 @@
 import { Header } from "@/components/Header";
-import { AnimatedBackground } from "@/components/AnimatedBackground";
+import { VideoBackground } from "@/components/VideoBackground";
 import { TWAPClientContent } from "@/components/twap/TWAPClientContent";
 import { fetchTokenData } from "@/lib/tokenData";
 import { TrendingUp } from "lucide-react";
@@ -12,7 +12,7 @@ export default async function TWAPPage() {
 
   return (
     <div className="min-h-screen relative">
-      <AnimatedBackground />
+      <VideoBackground />
       <div className="relative z-10">
         <Header tokenData={tokenData || undefined} activeTab="twap" />
 
@@ -27,7 +27,7 @@ export default async function TWAPPage() {
                 <div className="bg-movement-yellow p-1.5 rounded-lg shadow-lg shadow-movement-yellow/20">
                   <TrendingUp className="w-4 h-4 text-black" />
                 </div>
-                <span className="font-semibold text-white">Movement Network</span>
+                <span className="font-semibold text-white font-display">Movement Network</span>
               </div>
               <p className="text-white/40 text-sm">
                 TWAP Buyback Bot for Movement Network

@@ -3,7 +3,6 @@
 import { TrendingUp, Bot } from "lucide-react";
 import { TokenMarketData } from "@/types";
 import { formatPrice, formatPercentageChange } from "@/lib/tokenData";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -25,33 +24,24 @@ export function Header({ tokenData, activeTab }: HeaderProps) {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3">
-              {tokenData?.logoUrl ? (
-                <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-white/5 ring-1 ring-white/10">
-                  <Image
-                    src={tokenData.logoUrl}
-                    alt="MOVE logo"
-                    fill
-                    className="object-cover"
-                    unoptimized
-                  />
-                </div>
-              ) : (
-                <div className="bg-movement-yellow/90 p-2 rounded-xl shadow-lg shadow-movement-yellow/20">
-                  <TrendingUp className="w-6 h-6 text-black" />
-                </div>
-              )}
-              <div>
-                <h2 className="text-xl font-bold text-white">Move Alliance</h2>
-                <p className="text-xs text-white/50">Buyback Dashboard</p>
+            {/* Movement Logo */}
+            <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
+              <div className="w-10 h-10 rounded-xl bg-movement-yellow flex items-center justify-center shadow-lg shadow-movement-yellow/20">
+                <span className="text-black font-bold text-xl font-display">M</span>
               </div>
-            </div>
+              <div className="hidden sm:block">
+                <h2 className="text-xl font-bold text-white font-display tracking-tight">
+                  MOVEMENT
+                </h2>
+                <p className="text-xs text-white/50">Move Alliance</p>
+              </div>
+            </Link>
 
             {/* Tab Navigation */}
             <nav className="hidden md:flex items-center gap-1 ml-4">
               <Link
                 href="/"
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
                   currentTab === "tracker"
                     ? "bg-movement-yellow/20 text-movement-yellow border border-movement-yellow/30"
                     : "text-white/60 hover:text-white hover:bg-white/5"
@@ -62,7 +52,7 @@ export function Header({ tokenData, activeTab }: HeaderProps) {
               </Link>
               <Link
                 href="/twap"
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
                   currentTab === "twap"
                     ? "bg-movement-yellow/20 text-movement-yellow border border-movement-yellow/30"
                     : "text-white/60 hover:text-white hover:bg-white/5"
@@ -76,10 +66,10 @@ export function Header({ tokenData, activeTab }: HeaderProps) {
 
           <div className="flex items-center gap-4">
             {tokenData && (
-              <div className="hidden lg:flex items-center gap-3 px-4 py-2 glass rounded-xl">
+              <div className="hidden lg:flex items-center gap-3 px-4 py-2 glass-movement rounded-xl">
                 <div>
-                  <p className="text-xs text-white/50">Price</p>
-                  <p className="text-sm font-semibold text-white">
+                  <p className="text-xs text-white/50">$MOVE</p>
+                  <p className="text-sm font-semibold text-white font-display">
                     {formatPrice(tokenData.price)}
                   </p>
                 </div>
