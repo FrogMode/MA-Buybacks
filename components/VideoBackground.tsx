@@ -28,6 +28,7 @@ export function VideoBackground() {
             isLoaded ? "opacity-100" : "opacity-0"
           }`}
         >
+          <source src="/videos/movement-bg.webm" type="video/webm" />
           <source src="/videos/movement-bg.mp4" type="video/mp4" />
         </video>
 
