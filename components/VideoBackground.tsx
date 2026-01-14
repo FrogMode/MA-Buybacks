@@ -32,12 +32,11 @@ export function VideoBackground() {
           <source src="/videos/movement-bg.mp4" type="video/mp4" />
         </video>
 
-        {/* Dark overlay for readability */}
-        <div className="absolute inset-0 bg-black/60" />
+        {/* Dark overlay for readability - reduced for brighter video */}
+        <div className="absolute inset-0 bg-black/30" />
 
-        {/* Gradient overlays for depth */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/80" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/30 via-transparent to-black/30" />
+        {/* Gradient overlays for depth - lighter */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/50" />
       </div>
 
       {/* Fallback gradient background while video loads */}
