@@ -1,0 +1,12 @@
+project: ma-buyback-indexer
+version: 1
+
+# Movement Network mainnet configuration
+build:
+  source: src/processor.ts
+  output: dist
+
+# Processor configuration
+processor:
+  # Movement mainnet chain ID
+  chain: movement_mainnet
