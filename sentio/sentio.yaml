@@ -1,12 +1,12 @@
-project: ma-buyback-indexer
+project: ma_buybacks
 version: 1
 
 # Movement Network mainnet configuration
 build:
   source: src/processor.ts
-  output: dist
+  output: dist/lib.mjs
 
 # Processor configuration
 processor:
   # Movement mainnet chain ID
-  chain: movement_mainnet
+  chain: aptos_movement_mainnet

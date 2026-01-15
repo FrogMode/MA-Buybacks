@@ -115,6 +115,8 @@ export async function fetchTransactions(
         value: tx.value || 0,
         price: tx.price || 0,
         status: tx.status || "confirmed",
+        wallet: tx.wallet,
+        source: tx.source || "manual",
       })),
       timestamp: Date.now(),
     };

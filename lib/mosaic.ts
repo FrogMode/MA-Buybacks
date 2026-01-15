@@ -4,10 +4,10 @@
  * https://docs.mosaic.ag/swap-integration/api
  */
 
-// Movement Mainnet token addresses
+// Mosaic token IDs (fungible asset addresses used by Mosaic API)
 export const TOKENS = {
-  MOVE: "0x1::aptos_coin::AptosCoin",
-  USDC: "0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b::usdc::USDC",
+  MOVE: "0xa", // Native MOVE token
+  USDC: "0x83121c9f9b0527d1f056e21a950d6bf3b9e9e2e8353d0e95ccea726713cbea39", // USDC.e on Movement
 } as const;
 
 // Token decimals

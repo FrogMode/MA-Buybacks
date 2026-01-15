@@ -9,10 +9,10 @@
     "gen": "sentio gen"
   },
   "dependencies": {
-    "@sentio/sdk": "^2.40.0"
+    "@sentio/sdk": "^3.2.0"
   },
   "devDependencies": {
-    "@sentio/cli": "^2.40.0",
+    "@sentio/cli": "^3.2.0",
     "typescript": "^5.3.0"
   }
 }

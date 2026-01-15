@@ -1,6 +1,6 @@
 "use client";
 
-import { TrendingUp, Bot } from "lucide-react";
+import { TrendingUp, Bot, Info } from "lucide-react";
 import { TokenMarketData } from "@/types";
 import { formatPrice, formatPercentageChange } from "@/lib/tokenData";
 import Link from "next/link";
@@ -9,12 +9,12 @@ import { MovementLogoIcon } from "./MovementLogo";
 
 interface HeaderProps {
   tokenData?: TokenMarketData;
-  activeTab?: "tracker" | "twap";
+  activeTab?: "tracker" | "twap" | "about";
 }
 
 export function Header({ tokenData, activeTab }: HeaderProps) {
   const pathname = usePathname();
-  const currentTab = activeTab || (pathname === "/twap" ? "twap" : "tracker");
+  const currentTab = activeTab || (pathname === "/twap" ? "twap" : pathname === "/about" ? "about" : "tracker");
 
   const priceChange = tokenData
     ? formatPercentageChange(tokenData.priceChangePercentage24h)
@@ -59,6 +59,17 @@ export function Header({ tokenData, activeTab }: HeaderProps) {
               >
                 <Bot className="w-4 h-4" />
                 TWAP Bot
+              </Link>
+              <Link
+                href="/about"
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                  currentTab === "about"
+                    ? "bg-movement-yellow/20 text-movement-yellow border border-movement-yellow/30"
+                    : "text-white/60 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <Info className="w-4 h-4" />
+                About
               </Link>
             </nav>
           </div>
@@ -113,6 +124,16 @@ export function Header({ tokenData, activeTab }: HeaderProps) {
                 }`}
               >
                 <Bot className="w-5 h-5" />
+              </Link>
+              <Link
+                href="/about"
+                className={`p-2 rounded-lg transition-all ${
+                  currentTab === "about"
+                    ? "bg-movement-yellow/20 text-movement-yellow"
+                    : "text-white/60"
+                }`}
+              >
+                <Info className="w-5 h-5" />
               </Link>
             </nav>
           </div>

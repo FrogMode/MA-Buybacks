@@ -115,6 +115,9 @@ export function TransactionTable() {
                   Hash
                 </th>
                 <th className="text-left py-2 px-3 text-white/50 font-medium text-xs">
+                  Source
+                </th>
+                <th className="text-left py-2 px-3 text-white/50 font-medium text-xs">
                   Time
                 </th>
                 <th className="text-right py-2 px-3 text-white/50 font-medium text-xs">
@@ -142,6 +145,17 @@ export function TransactionTable() {
                     <code className="text-movement-yellow text-xs font-mono bg-movement-yellow/10 px-2 py-0.5 rounded">
                       {formatHash(tx.hash)}
                     </code>
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        tx.source === "twap"
+                          ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                          : "bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                      }`}
+                    >
+                      {tx.source === "twap" ? "TWAP Bot" : "Manual"}
+                    </span>
                   </td>
                   <td className="py-2.5 px-3 text-white/60 text-xs">
                     {getTimeAgo(tx.timestamp)}

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
-import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 import { RefreshCw } from "lucide-react";
 import type { TokenBalances } from "@/types/twap";
 
@@ -10,53 +9,102 @@ interface BalanceDisplayProps {
   onBalanceUpdate?: (balances: TokenBalances) => void;
 }
 
-const MOVEMENT_RPC = "https://aptos.testnet.porto.movementlabs.xyz/v1";
-const MOVE_TOKEN = "0x1::aptos_coin::AptosCoin";
+// Movement Mainnet Indexer GraphQL endpoint
+const INDEXER_URL = "https://indexer.mainnet.movementnetwork.xyz/v1/graphql";
+
+// Token identifiers for fungible assets
+const MOVE_ASSET = "0x1::aptos_coin::AptosCoin";
+const USDC_ASSETS = [
+  "0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b::usdc::USDC", // Native USDC
+  "0x83121c9f9b0527d1f056e21a950d6bf3b9e9e2e8353d0e95ccea726713cbea39", // USDC.e fungible asset
+];
 
 export function BalanceDisplay({ onBalanceUpdate }: BalanceDisplayProps) {
   const { account, connected } = useWallet();
   const [balances, setBalances] = useState<TokenBalances | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const address = account?.address?.toString();
 
   const fetchBalances = useCallback(async () => {
-    if (!address) return;
+    if (!address) {
+      console.log("No address available");
+      return;
+    }
 
     setIsRefreshing(true);
+    setError(null);
+    
     try {
-      const config = new AptosConfig({
-        network: Network.CUSTOM,
-        fullnode: MOVEMENT_RPC,
-      });
-      const aptos = new Aptos(config);
-
-      let moveBalance = 0;
-
-      try {
-        const resources = await aptos.getAccountResources({
-          accountAddress: address,
-        });
-
-        const moveCoinStore = resources.find(
-          (r) => r.type === `0x1::coin::CoinStore<${MOVE_TOKEN}>`
-        );
-
-        if (moveCoinStore) {
-          const data = moveCoinStore.data as { coin: { value: string } };
-          moveBalance = parseInt(data.coin.value, 10) / 1e8;
+      // Use GraphQL indexer to fetch fungible asset balances
+      const query = `
+        query GetBalances($address: String!) {
+          current_fungible_asset_balances(
+            where: { owner_address: { _eq: $address } }
+          ) {
+            asset_type
+            amount
+            metadata {
+              name
+              symbol
+              decimals
+            }
+          }
         }
-      } catch (err) {
-        console.error("Error fetching balances:", err);
+      `;
+
+      const response = await fetch(INDEXER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query,
+          variables: { address },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.errors) {
+        throw new Error(result.errors[0]?.message || "GraphQL error");
+      }
+
+      const assetBalances = result.data?.current_fungible_asset_balances || [];
+      
+      let moveBalance = 0;
+      let usdcBalance = 0;
+
+      for (const asset of assetBalances) {
+        const assetType = asset.asset_type;
+        const amount = parseInt(asset.amount, 10);
+        const decimals = asset.metadata?.decimals || 8;
+
+        // Check for MOVE
+        if (assetType === MOVE_ASSET) {
+          moveBalance = amount / Math.pow(10, decimals);
+        }
+        
+        // Check for USDC (any variant)
+        if (USDC_ASSETS.includes(assetType) || 
+            asset.metadata?.symbol?.toUpperCase().includes("USDC")) {
+          usdcBalance += amount / Math.pow(10, decimals);
+        }
       }
 
       const newBalances = {
         MOVE: moveBalance,
-        USDC: 0,
+        USDC: usdcBalance,
       };
 
       setBalances(newBalances);
       onBalanceUpdate?.(newBalances);
+    } catch (err) {
+      console.error("Error fetching balances:", err);
+      setError(err instanceof Error ? err.message : "Failed to fetch balances");
     } finally {
       setIsRefreshing(false);
     }
@@ -95,6 +143,12 @@ export function BalanceDisplay({ onBalanceUpdate }: BalanceDisplayProps) {
         </button>
       </div>
 
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+          <p className="text-red-400 text-sm">{error}</p>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         <div className="glass-subtle rounded-xl p-4">
           <p className="text-white/50 text-sm mb-1">USDC</p>
@@ -119,6 +173,12 @@ export function BalanceDisplay({ onBalanceUpdate }: BalanceDisplayProps) {
           </p>
         </div>
       </div>
+
+      {address && (
+        <p className="text-white/30 text-xs mt-3 truncate">
+          Wallet: {address}
+        </p>
+      )}
     </div>
   );
 }

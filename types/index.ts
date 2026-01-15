@@ -7,6 +7,8 @@ export interface BuybackTransaction {
   value: number;
   price: number;
   status: "confirmed" | "pending";
+  wallet?: string; // Source wallet address
+  source?: "manual" | "twap"; // Buyback source type
 }
 
 export interface BuybackStats {

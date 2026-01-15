@@ -1,12 +1,46 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { Fuel, ExternalLink } from "lucide-react";
 import { TWAPConfig } from "./TWAPConfig";
 import { BalanceDisplay } from "./BalanceDisplay";
 import { TradeHistory } from "./TradeHistory";
 import { StatusDisplay } from "./StatusDisplay";
 import { WalletProvider } from "./WalletProvider";
 import type { TokenBalances, TWAPStatus, TradeExecution } from "@/types/twap";
+
+function GasStationBanner() {
+  return (
+    <div className="glass rounded-xl p-4 mb-6 border border-movement-yellow/20 bg-movement-yellow/5">
+      <div className="flex items-start gap-3">
+        <div className="p-2 rounded-lg bg-movement-yellow/20">
+          <Fuel className="w-5 h-5 text-movement-yellow" />
+        </div>
+        <div className="flex-1">
+          <h3 className="font-semibold text-movement-yellow mb-1">
+            Gasless Transactions
+          </h3>
+          <p className="text-sm text-white/70 mb-2">
+            Swap transactions are sponsored by{" "}
+            <a
+              href="https://shinami.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-movement-yellow hover:underline inline-flex items-center gap-1"
+            >
+              Shinami Gas Station
+              <ExternalLink className="w-3 h-3" />
+            </a>
+            . You don&apos;t need MOVE tokens to pay for gas fees—execute TWAP buybacks completely free of transaction costs.
+          </p>
+          <p className="text-xs text-white/50">
+            Powered by Shinami&apos;s fee sponsorship infrastructure on Movement Network.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function TWAPContent() {
   const [, setBalances] = useState<TokenBalances | null>(null);
@@ -46,6 +80,8 @@ function TWAPContent() {
         </div>
         <StatusDisplay />
       </div>
+
+      <GasStationBanner />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-6">
