@@ -299,11 +299,57 @@ export function TWAPConfig({
           action: "confirm_deposit",
           txHash: response.hash,
           amount: session.totalAmount,
+          userAddress: account.address.toString(),
         }),
       });
 
       if (!confirmResponse.ok) {
-        throw new Error("Failed to confirm deposit");
+        const errorData = await confirmResponse.json();
+        // If session not found, it may have been lost due to serverless cold start
+        // Create a new session and confirm it
+        if (errorData.error === "Session not found") {
+          // Re-create session and confirm deposit
+          const recreateResponse = await fetch("/api/session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userAddress: account.address.toString(),
+              totalAmount: session.totalAmount.toString(),
+              numTrades: session.numTrades.toString(),
+              intervalMinutes: session.intervalMinutes.toString(),
+              slippageBps: session.slippageBps.toString(),
+            }),
+          });
+
+          if (!recreateResponse.ok) {
+            throw new Error("Failed to recreate session after deposit");
+          }
+
+          const { session: newSession } = await recreateResponse.json();
+          
+          // Now confirm the deposit on the new session
+          const reconfirmResponse = await fetch("/api/session", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sessionId: newSession.id,
+              action: "confirm_deposit",
+              txHash: response.hash,
+              amount: session.totalAmount,
+              userAddress: account.address.toString(),
+            }),
+          });
+
+          if (!reconfirmResponse.ok) {
+            throw new Error("Failed to confirm deposit on recreated session");
+          }
+
+          const { session: confirmedSession } = await reconfirmResponse.json();
+          setSession(confirmedSession);
+          updateStatusFromSession(confirmedSession);
+          return;
+        }
+        throw new Error(errorData.error || "Failed to confirm deposit");
       }
 
       const { session: updatedSession } = await confirmResponse.json();

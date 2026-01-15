@@ -109,15 +109,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for existing active sessions for this user (limit to 1 active session per user)
+    // Note: We allow creating a new session if the previous one was lost due to serverless cold start
     const existingSessions = getSessionsByUser(userAddress);
-    const hasActiveSession = existingSessions.some(
+    const activeSession = existingSessions.find(
       s => s.status === "active" || s.status === "awaiting_deposit"
     );
-    if (hasActiveSession) {
-      return NextResponse.json(
-        { error: "You already have an active TWAP session. Please complete or cancel it first." },
-        { status: 409 }
-      );
+    if (activeSession) {
+      // Return the existing session instead of creating a new one
+      return NextResponse.json({
+        success: true,
+        session: sanitizeSession(activeSession),
+        executorAddress: getExecutorAddress(),
+        instructions: `You have an existing session. Send ${activeSession.totalAmount} USDC to ${getExecutorAddress()} to start your TWAP`,
+        existing: true,
+      });
     }
 
     // Create the session
