@@ -142,7 +142,7 @@ export function TradeHistory({ trades, onRefresh }: TradeHistoryProps) {
                       {trade.txHash}
                     </span>
                     <a
-                      href={`https://explorer.movementnetwork.xyz/txn/${trade.txHash}?network=porto+testnet`}
+                      href={`https://explorer.movementnetwork.xyz/txn/${trade.txHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-movement-yellow hover:text-movement-yellow-light transition-colors"

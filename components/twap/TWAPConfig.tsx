@@ -2,19 +2,32 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
-import { Play, Square, Clock, Zap } from "lucide-react";
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+import { Play, Square, Clock, Zap, AlertCircle, ExternalLink } from "lucide-react";
 import type { TWAPStatus, TradeExecution } from "@/types/twap";
+import {
+  getQuote,
+  setMosaicApiKey,
+  getMosaicApiKey,
+  TOKENS,
+  TOKEN_DECIMALS,
+  toRawAmount,
+  fromRawAmount,
+} from "@/lib/mosaic";
 
 interface TWAPConfigProps {
   onStatusChange: (status: TWAPStatus) => void;
   onTradeExecuted: (trade: TradeExecution) => void;
 }
 
+// Movement Network RPC
+const MOVEMENT_RPC = "https://mainnet.movementnetwork.xyz/v1";
+
 export function TWAPConfig({
   onStatusChange,
   onTradeExecuted,
 }: TWAPConfigProps) {
-  const { connected, account } = useWallet();
+  const { connected, account, signAndSubmitTransaction } = useWallet();
   const [totalAmount, setTotalAmount] = useState("1000");
   const [numTrades, setNumTrades] = useState("10");
   const [intervalHours, setIntervalHours] = useState("1");
@@ -24,64 +37,136 @@ export function TWAPConfig({
   const [nextTradeAt, setNextTradeAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [isApiKeySet, setIsApiKeySet] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const aptosClientRef = useRef<Aptos | null>(null);
 
-  const totalTrades = parseInt(numTrades, 10) || 0;
-  const amountPerTrade = parseFloat(totalAmount) / totalTrades || 0;
+  const totalTradesNum = parseInt(numTrades, 10) || 0;
+  const amountPerTrade = parseFloat(totalAmount) / totalTradesNum || 0;
   const progress =
-    totalTrades > 0 ? (tradesCompleted / totalTrades) * 100 : 0;
+    totalTradesNum > 0 ? (tradesCompleted / totalTradesNum) * 100 : 0;
+
+  // Initialize Aptos client
+  useEffect(() => {
+    if (!aptosClientRef.current) {
+      const aptosConfig = new AptosConfig({
+        network: Network.CUSTOM,
+        fullnode: MOVEMENT_RPC,
+      });
+      aptosClientRef.current = new Aptos(aptosConfig);
+    }
+  }, []);
+
+  // Check if API key is already set (from localStorage)
+  useEffect(() => {
+    const savedKey = localStorage.getItem("mosaic_api_key");
+    if (savedKey) {
+      setMosaicApiKey(savedKey);
+      setIsApiKeySet(true);
+    }
+  }, []);
+
+  const handleSetApiKey = () => {
+    if (apiKeyInput.trim()) {
+      setMosaicApiKey(apiKeyInput.trim());
+      localStorage.setItem("mosaic_api_key", apiKeyInput.trim());
+      setIsApiKeySet(true);
+      setApiKeyInput("");
+    }
+  };
+
+  const handleClearApiKey = () => {
+    setMosaicApiKey("");
+    localStorage.removeItem("mosaic_api_key");
+    setIsApiKeySet(false);
+  };
 
   const executeTrade = useCallback(async () => {
-    if (!connected || !account) {
+    if (!connected || !account?.address) {
       setError("Wallet not connected");
       return;
     }
 
+    if (!getMosaicApiKey()) {
+      setError("Mosaic API key not configured");
+      return;
+    }
+
     const tradeId = `trade-${Date.now()}-${tradesCompleted + 1}`;
+    const trade: TradeExecution = {
+      id: tradeId,
+      timestamp: Date.now(),
+      amountIn: amountPerTrade,
+      amountOut: 0,
+      txHash: "",
+      status: "pending",
+    };
+
+    onTradeExecuted({ ...trade });
 
     try {
-      const trade: TradeExecution = {
-        id: tradeId,
-        timestamp: Date.now(),
-        amountIn: amountPerTrade,
-        amountOut: amountPerTrade * 0.5,
-        txHash: "",
-        status: "pending",
+      // Get quote from Mosaic
+      const rawAmount = toRawAmount(amountPerTrade, TOKEN_DECIMALS.USDC);
+      
+      const quoteResponse = await getQuote({
+        srcAsset: TOKENS.USDC,
+        dstAsset: TOKENS.MOVE,
+        amount: rawAmount,
+        sender: account.address.toString(),
+        slippage: parseInt(slippageBps, 10),
+      });
+
+      const expectedOut = fromRawAmount(quoteResponse.data.dstAmount, TOKEN_DECIMALS.MOVE);
+      trade.amountOut = expectedOut;
+
+      // Build and submit transaction using wallet adapter
+      const txPayload = {
+        function: quoteResponse.data.tx.function as `${string}::${string}::${string}`,
+        typeArguments: quoteResponse.data.tx.typeArguments,
+        functionArguments: quoteResponse.data.tx.functionArguments,
       };
 
-      onTradeExecuted({ ...trade, status: "pending" });
+      const response = await signAndSubmitTransaction({
+        data: txPayload,
+      });
 
-      // Simulated transaction
-      const simulatedTxHash = `0x${Array.from({ length: 64 }, () =>
-        Math.floor(Math.random() * 16).toString(16)
-      ).join("")}`;
+      trade.txHash = response.hash;
 
-      trade.txHash = simulatedTxHash;
+      // Wait for transaction confirmation
+      if (aptosClientRef.current) {
+        const result = await aptosClientRef.current.waitForTransaction({
+          transactionHash: response.hash,
+        });
+
+        if (!result.success) {
+          throw new Error(`Transaction failed: ${result.vm_status}`);
+        }
+      }
+
       trade.status = "success";
-
       onTradeExecuted(trade);
       setTradesCompleted((prev) => prev + 1);
       setError(null);
+
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Trade failed";
       setError(errorMessage);
-
-      onTradeExecuted({
-        id: tradeId,
-        timestamp: Date.now(),
-        amountIn: amountPerTrade,
-        amountOut: 0,
-        txHash: "",
-        status: "failed",
-        error: errorMessage,
-      });
+      trade.status = "failed";
+      trade.error = errorMessage;
+      onTradeExecuted(trade);
     }
-  }, [connected, account, amountPerTrade, tradesCompleted, onTradeExecuted]);
+  }, [connected, account, amountPerTrade, tradesCompleted, slippageBps, onTradeExecuted, signAndSubmitTransaction]);
 
   const handleStart = async () => {
     if (!connected) {
       setError("Please connect your wallet first");
+      return;
+    }
+
+    if (!getMosaicApiKey()) {
+      setError("Please configure your Mosaic API key first");
       return;
     }
 
@@ -96,7 +181,7 @@ export function TWAPConfig({
 
       await executeTrade();
 
-      if (totalTrades > 1) {
+      if (totalTradesNum > 1) {
         setNextTradeAt(Date.now() + intervalMs);
         intervalRef.current = setInterval(async () => {
           await executeTrade();
@@ -109,14 +194,14 @@ export function TWAPConfig({
         config: {
           totalAmount: parseFloat(totalAmount),
           intervalMs,
-          numTrades: totalTrades,
+          numTrades: totalTradesNum,
           slippageBps: parseInt(slippageBps, 10),
-          tokenIn: "USDC",
-          tokenOut: "MOVE",
+          tokenIn: TOKENS.USDC,
+          tokenOut: TOKENS.MOVE,
         },
         tradesCompleted: 0,
-        totalTrades,
-        nextTradeAt: totalTrades > 1 ? Date.now() + intervalMs : null,
+        totalTrades: totalTradesNum,
+        nextTradeAt: totalTradesNum > 1 ? Date.now() + intervalMs : null,
         startedAt: Date.now(),
       });
     } catch (err) {
@@ -147,10 +232,10 @@ export function TWAPConfig({
   };
 
   useEffect(() => {
-    if (isActive && tradesCompleted >= totalTrades && totalTrades > 0) {
+    if (isActive && tradesCompleted >= totalTradesNum && totalTradesNum > 0) {
       handleStop();
     }
-  }, [tradesCompleted, totalTrades, isActive]);
+  }, [tradesCompleted, totalTradesNum, isActive]);
 
   useEffect(() => {
     return () => {
@@ -166,6 +251,57 @@ export function TWAPConfig({
         TWAP Configuration
       </h2>
 
+      {/* API Key Configuration */}
+      {!isApiKeySet && (
+        <div className="mb-6 glass-subtle rounded-xl p-4 border border-movement-yellow/20">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertCircle className="w-5 h-5 text-movement-yellow" />
+            <span className="font-medium text-movement-yellow">Mosaic API Key Required</span>
+          </div>
+          <p className="text-white/60 text-sm mb-3">
+            Enter your Mosaic API key to enable swaps. Get one from{" "}
+            <a
+              href="https://docs.mosaic.ag/swap-integration/api"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-movement-yellow hover:underline inline-flex items-center gap-1"
+            >
+              Mosaic <ExternalLink className="w-3 h-3" />
+            </a>
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="password"
+              value={apiKeyInput}
+              onChange={(e) => setApiKeyInput(e.target.value)}
+              placeholder="Enter API key..."
+              className="flex-1 px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/40 focus:outline-none focus:border-movement-yellow/50"
+            />
+            <button
+              onClick={handleSetApiKey}
+              className="px-4 py-2 rounded-lg bg-movement-yellow text-black font-medium hover:bg-movement-yellow-light transition-colors"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isApiKeySet && !isActive && (
+        <div className="mb-4 flex items-center justify-between text-sm">
+          <span className="text-emerald-400 flex items-center gap-2">
+            <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
+            Mosaic API configured
+          </span>
+          <button
+            onClick={handleClearApiKey}
+            className="text-white/50 hover:text-white/70 text-xs"
+          >
+            Clear API Key
+          </button>
+        </div>
+      )}
+
       {isActive ? (
         <div className="space-y-4">
           <div className="glass-subtle rounded-xl p-4 border border-movement-yellow/20">
@@ -179,7 +315,7 @@ export function TWAPConfig({
               <div>
                 <p className="text-white/50">Progress</p>
                 <p className="font-medium text-white">
-                  {tradesCompleted} / {totalTrades} trades
+                  {tradesCompleted} / {totalTradesNum} trades
                 </p>
               </div>
               <div>
@@ -302,7 +438,7 @@ export function TWAPConfig({
 
           <button
             onClick={handleStart}
-            disabled={loading || !connected}
+            disabled={loading || !connected || !isApiKeySet}
             className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-movement-yellow text-black hover:bg-movement-yellow-light hover:shadow-lg hover:shadow-movement-yellow/30"
           >
             <Play className="w-4 h-4" />
