@@ -1,5 +1,6 @@
 /**
- * Mosaic DEX Aggregator API Client
+ * Mosaic DEX Aggregator Client
+ * Uses server-side API route to proxy requests (API key stored securely on server)
  * https://docs.mosaic.ag/swap-integration/api
  */
 
@@ -22,9 +23,6 @@ export interface MosaicQuoteParams {
   sender?: string;
   receiver?: string;
   slippage?: number; // In basis points (100 = 1%)
-  isFeeIn?: boolean;
-  feeInBps?: number;
-  feeReceiver?: string;
 }
 
 export interface MosaicQuoteResponse {
@@ -53,35 +51,11 @@ export interface MosaicQuoteResponse {
   };
 }
 
-export interface MosaicToken {
-  id: string;
-  decimals: number;
-  name: string;
-  symbol: string;
-}
-
-const MOSAIC_API_URL = "https://api.mosaic.ag/v1";
-
-// API key should be stored securely - this will be passed from environment
-let mosaicApiKey: string | null = null;
-
-export function setMosaicApiKey(key: string) {
-  mosaicApiKey = key;
-}
-
-export function getMosaicApiKey(): string | null {
-  return mosaicApiKey;
-}
-
 /**
- * Get swap quote from Mosaic API
+ * Get swap quote via our API route (which handles the Mosaic API key server-side)
  */
 export async function getQuote(params: MosaicQuoteParams): Promise<MosaicQuoteResponse> {
-  if (!mosaicApiKey) {
-    throw new Error("Mosaic API key not configured");
-  }
-
-  const url = new URL(`${MOSAIC_API_URL}/quote`);
+  const url = new URL("/api/mosaic/quote", window.location.origin);
   url.searchParams.set("srcAsset", params.srcAsset);
   url.searchParams.set("dstAsset", params.dstAsset);
   url.searchParams.set("amount", params.amount);
@@ -95,64 +69,26 @@ export async function getQuote(params: MosaicQuoteParams): Promise<MosaicQuoteRe
   if (params.slippage !== undefined) {
     url.searchParams.set("slippage", params.slippage.toString());
   }
-  if (params.isFeeIn !== undefined) {
-    url.searchParams.set("isFeeIn", params.isFeeIn.toString());
-  }
-  if (params.feeInBps !== undefined) {
-    url.searchParams.set("feeInBps", params.feeInBps.toString());
-  }
-  if (params.feeReceiver) {
-    url.searchParams.set("feeReceiver", params.feeReceiver);
-  }
 
   const response = await fetch(url.toString(), {
     method: "GET",
     headers: {
-      "X-API-Key": mosaicApiKey,
       "Accept": "application/json",
     },
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Mosaic API error: ${response.status} - ${errorText}`);
+    const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(errorData.error || `API error: ${response.status}`);
   }
 
   const data: MosaicQuoteResponse = await response.json();
 
   if (data.code !== 0) {
-    throw new Error(`Mosaic API error: ${data.message}`);
+    throw new Error(`Mosaic error: ${data.message}`);
   }
 
   return data;
-}
-
-/**
- * Get list of supported tokens
- */
-export async function getTokens(): Promise<Record<string, MosaicToken>> {
-  if (!mosaicApiKey) {
-    // Return default tokens if API key not configured
-    return {
-      [TOKENS.MOVE]: { id: TOKENS.MOVE, decimals: 8, name: "Movement", symbol: "MOVE" },
-      [TOKENS.USDC]: { id: TOKENS.USDC, decimals: 6, name: "USD Coin", symbol: "USDC" },
-    };
-  }
-
-  const response = await fetch(`${MOSAIC_API_URL}/tokens`, {
-    method: "GET",
-    headers: {
-      "X-API-Key": mosaicApiKey,
-      "Accept": "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch tokens: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.tokenById || {};
 }
 
 /**

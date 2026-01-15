@@ -3,12 +3,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
-import { Play, Square, Clock, Zap, AlertCircle, ExternalLink } from "lucide-react";
+import { Play, Square, Clock, Zap } from "lucide-react";
 import type { TWAPStatus, TradeExecution } from "@/types/twap";
 import {
   getQuote,
-  setMosaicApiKey,
-  getMosaicApiKey,
   TOKENS,
   TOKEN_DECIMALS,
   toRawAmount,
@@ -37,8 +35,6 @@ export function TWAPConfig({
   const [nextTradeAt, setNextTradeAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [apiKeyInput, setApiKeyInput] = useState("");
-  const [isApiKeySet, setIsApiKeySet] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const aptosClientRef = useRef<Aptos | null>(null);
 
@@ -58,38 +54,9 @@ export function TWAPConfig({
     }
   }, []);
 
-  // Check if API key is already set (from localStorage)
-  useEffect(() => {
-    const savedKey = localStorage.getItem("mosaic_api_key");
-    if (savedKey) {
-      setMosaicApiKey(savedKey);
-      setIsApiKeySet(true);
-    }
-  }, []);
-
-  const handleSetApiKey = () => {
-    if (apiKeyInput.trim()) {
-      setMosaicApiKey(apiKeyInput.trim());
-      localStorage.setItem("mosaic_api_key", apiKeyInput.trim());
-      setIsApiKeySet(true);
-      setApiKeyInput("");
-    }
-  };
-
-  const handleClearApiKey = () => {
-    setMosaicApiKey("");
-    localStorage.removeItem("mosaic_api_key");
-    setIsApiKeySet(false);
-  };
-
   const executeTrade = useCallback(async () => {
     if (!connected || !account?.address) {
       setError("Wallet not connected");
-      return;
-    }
-
-    if (!getMosaicApiKey()) {
-      setError("Mosaic API key not configured");
       return;
     }
 
@@ -106,7 +73,7 @@ export function TWAPConfig({
     onTradeExecuted({ ...trade });
 
     try {
-      // Get quote from Mosaic
+      // Get quote from Mosaic via our API route
       const rawAmount = toRawAmount(amountPerTrade, TOKEN_DECIMALS.USDC);
       
       const quoteResponse = await getQuote({
@@ -162,11 +129,6 @@ export function TWAPConfig({
   const handleStart = async () => {
     if (!connected) {
       setError("Please connect your wallet first");
-      return;
-    }
-
-    if (!getMosaicApiKey()) {
-      setError("Please configure your Mosaic API key first");
       return;
     }
 
@@ -250,57 +212,6 @@ export function TWAPConfig({
       <h2 className="text-lg font-semibold text-gradient mb-4">
         TWAP Configuration
       </h2>
-
-      {/* API Key Configuration */}
-      {!isApiKeySet && (
-        <div className="mb-6 glass-subtle rounded-xl p-4 border border-movement-yellow/20">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertCircle className="w-5 h-5 text-movement-yellow" />
-            <span className="font-medium text-movement-yellow">Mosaic API Key Required</span>
-          </div>
-          <p className="text-white/60 text-sm mb-3">
-            Enter your Mosaic API key to enable swaps. Get one from{" "}
-            <a
-              href="https://docs.mosaic.ag/swap-integration/api"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-movement-yellow hover:underline inline-flex items-center gap-1"
-            >
-              Mosaic <ExternalLink className="w-3 h-3" />
-            </a>
-          </p>
-          <div className="flex gap-2">
-            <input
-              type="password"
-              value={apiKeyInput}
-              onChange={(e) => setApiKeyInput(e.target.value)}
-              placeholder="Enter API key..."
-              className="flex-1 px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/40 focus:outline-none focus:border-movement-yellow/50"
-            />
-            <button
-              onClick={handleSetApiKey}
-              className="px-4 py-2 rounded-lg bg-movement-yellow text-black font-medium hover:bg-movement-yellow-light transition-colors"
-            >
-              Save
-            </button>
-          </div>
-        </div>
-      )}
-
-      {isApiKeySet && !isActive && (
-        <div className="mb-4 flex items-center justify-between text-sm">
-          <span className="text-emerald-400 flex items-center gap-2">
-            <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
-            Mosaic API configured
-          </span>
-          <button
-            onClick={handleClearApiKey}
-            className="text-white/50 hover:text-white/70 text-xs"
-          >
-            Clear API Key
-          </button>
-        </div>
-      )}
 
       {isActive ? (
         <div className="space-y-4">
@@ -438,7 +349,7 @@ export function TWAPConfig({
 
           <button
             onClick={handleStart}
-            disabled={loading || !connected || !isApiKeySet}
+            disabled={loading || !connected}
             className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-movement-yellow text-black hover:bg-movement-yellow-light hover:shadow-lg hover:shadow-movement-yellow/30"
           >
             <Play className="w-4 h-4" />
