@@ -2,7 +2,8 @@ import { AptosModulesProcessor, AptosContext, AptosNetwork } from "@sentio/sdk/a
 import type { UserTransactionResponse } from "@aptos-labs/ts-sdk";
 
 // Mosaic Router contract address on Movement mainnet
-const MOSAIC_ROUTER = "0xede23ef215f0594e658b148c2a391b1523335ab01495d8637e076ec510c6ec3c";
+// Note: This is the actual router being used by Mosaic API
+const MOSAIC_ROUTER = "0x3f7399a0d3d646ce94ee0badf16c4c3f3c656fe3a5e142e83b5ebc011aa8b3d";
 
 // Token decimals
 const TOKEN_DECIMALS = {
