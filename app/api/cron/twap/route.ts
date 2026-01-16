@@ -90,13 +90,13 @@ export async function GET(request: NextRequest) {
     console.log(`[${requestId}] Starting TWAP cron execution`);
 
     // Clean up expired sessions first
-    const cleaned = cleanupExpiredSessions();
+    const cleaned = await cleanupExpiredSessions();
     if (cleaned > 0) {
       console.log(`[${requestId}] Cleaned up ${cleaned} expired sessions`);
     }
 
     // Get sessions that need trade execution
-    const sessionsToExecute = getActiveSessionsForExecution();
+    const sessionsToExecute = await getActiveSessionsForExecution();
 
     if (sessionsToExecute.length === 0) {
       return NextResponse.json({
