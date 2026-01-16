@@ -2,8 +2,11 @@ import { AptosModulesProcessor, AptosContext, AptosNetwork } from "@sentio/sdk/a
 import type { UserTransactionResponse } from "@aptos-labs/ts-sdk";
 
 // Mosaic Router contract address on Movement mainnet
-// Note: This is the actual router being used by Mosaic API
 const MOSAIC_ROUTER = "0x3f7399a0d3d646ce94ee0badf16c4c3f3c656fe3a5e142e83b5ebc011aa8b3d";
+
+// Token addresses
+const USDC_ADDRESS = "0x83121c9f9b0527d1f056e21a950d6bf3b9e9e2e8353d0e95ccea726713cbea39";
+const MOVE_ADDRESS = "0x1::aptos_coin::AptosCoin";
 
 // Token decimals
 const TOKEN_DECIMALS = {
@@ -41,6 +44,32 @@ function isBuybackWallet(address: string): boolean {
 }
 
 /**
+ * Check if asset is USDC
+ */
+function isUsdcAsset(asset: string): boolean {
+  return asset.toLowerCase() === USDC_ADDRESS.toLowerCase();
+}
+
+/**
+ * Check if asset is MOVE
+ */
+function isMoveAsset(asset: string): boolean {
+  return asset.toLowerCase().includes("aptos_coin");
+}
+
+// Define the SwapEvent data structure
+interface SwapEventData {
+  sender: string;
+  receiver: string;
+  input_asset: string;
+  output_asset: string;
+  input_amount: string;
+  output_amount: string;
+  timestamp: string;
+  extra_data?: string;
+}
+
+/**
  * Process Mosaic router swap events
  */
 AptosModulesProcessor.bind({
@@ -49,89 +78,71 @@ AptosModulesProcessor.bind({
   startVersion: 0n,
 }).onTransaction(
   async (tx: UserTransactionResponse, ctx: AptosContext) => {
-    // Check if this is a swap transaction
-    const payload = tx.payload;
-    if (!payload || payload.type !== "entry_function_payload") {
+    // Skip failed transactions
+    if (!tx.success) {
       return;
     }
 
-    const functionPayload = payload as {
-      function: string;
-      type_arguments: string[];
-      arguments: any[];
-    };
-
-    // Check if it's a Mosaic router swap function
-    if (!functionPayload.function.includes("::router::swap")) {
+    // Look for SwapEvent from Mosaic router
+    if (!tx.events) {
       return;
     }
 
-    const sender = tx.sender;
-    
-    // Only process transactions from tracked buyback wallets
-    if (!isBuybackWallet(sender)) {
-      return;
-    }
-
-    // Extract type arguments to determine swap direction
-    const typeArgs = functionPayload.type_arguments || [];
-    
-    // Check if this is a USDC -> MOVE swap (buyback)
-    const srcAsset = typeArgs[0] || "";
-    const dstAsset = typeArgs[1] || "";
-    
-    const isUsdcToMove = 
-      srcAsset.toLowerCase().includes("usdc") && 
-      dstAsset.toLowerCase().includes("aptos_coin");
-    
-    if (!isUsdcToMove) {
-      return;
-    }
-
-    // Extract amounts from transaction events
-    let usdcAmount = 0;
-    let moveAmount = 0;
-
-    // Parse events to get actual swap amounts
-    if (tx.events) {
-      for (const event of tx.events) {
-        const eventData = event.data as { amount?: string | number };
-        // Look for coin withdraw events (USDC spent)
-        if (event.type.toLowerCase().includes("withdraw") && event.type.toLowerCase().includes("usdc")) {
-          usdcAmount = fromRawAmount(eventData?.amount || 0, TOKEN_DECIMALS.USDC);
-        }
-        // Look for coin deposit events (MOVE received)
-        if (event.type.toLowerCase().includes("deposit") && event.type.toLowerCase().includes("aptoscoin")) {
-          moveAmount = fromRawAmount(eventData?.amount || 0, TOKEN_DECIMALS.MOVE);
-        }
+    for (const event of tx.events) {
+      // Check if this is a Mosaic SwapEvent
+      if (!event.type.includes(`${MOSAIC_ROUTER}::router::SwapEvent`)) {
+        continue;
       }
+
+      const eventData = event.data as SwapEventData;
+      const sender = eventData.sender;
+
+      // Only process transactions from tracked buyback wallets
+      if (!isBuybackWallet(sender)) {
+        continue;
+      }
+
+      // Check if this is a USDC -> MOVE swap (buyback)
+      const inputAsset = eventData.input_asset;
+      const outputAsset = eventData.output_asset;
+
+      const isUsdcToMove = isUsdcAsset(inputAsset) && isMoveAsset(outputAsset);
+
+      if (!isUsdcToMove) {
+        // Skip non-buyback swaps (e.g., MOVE -> USDC would be a sell)
+        continue;
+      }
+
+      // Parse amounts
+      const usdcAmount = fromRawAmount(eventData.input_amount, TOKEN_DECIMALS.USDC);
+      const moveAmount = fromRawAmount(eventData.output_amount, TOKEN_DECIMALS.MOVE);
+
+      // Calculate effective price
+      const pricePerMove = usdcAmount > 0 && moveAmount > 0 
+        ? usdcAmount / moveAmount 
+        : 0;
+
+      // Log the buyback event
+      ctx.eventLogger.emit("buyback", {
+        distinctId: tx.hash,
+        txHash: tx.hash,
+        wallet: sender,
+        timestamp: Number(eventData.timestamp),
+        usdcAmount,
+        moveAmount,
+        pricePerMove,
+        inputAsset,
+        outputAsset,
+        version: tx.version?.toString() || "0",
+        success: tx.success,
+      });
+
+      // Emit metrics for dashboards
+      ctx.meter.Counter("buyback_count").add(1, { wallet: sender });
+      ctx.meter.Counter("buyback_usdc_total").add(usdcAmount, { wallet: sender });
+      ctx.meter.Counter("buyback_move_total").add(moveAmount, { wallet: sender });
+      ctx.meter.Gauge("buyback_price").record(pricePerMove, { wallet: sender });
     }
-
-    // Calculate effective price
-    const pricePerMove = usdcAmount > 0 && moveAmount > 0 
-      ? usdcAmount / moveAmount 
-      : 0;
-
-    // Log the buyback event
-    ctx.eventLogger.emit("buyback", {
-      distinctId: tx.hash,
-      txHash: tx.hash,
-      wallet: sender,
-      timestamp: Number(tx.timestamp) / 1000,
-      usdcAmount,
-      moveAmount,
-      pricePerMove,
-      srcAsset,
-      dstAsset,
-      version: tx.version?.toString() || "0",
-      success: tx.success,
-    });
-
-    // Emit metrics for dashboards
-    ctx.meter.Counter("buyback_count").add(1, { wallet: sender });
-    ctx.meter.Counter("buyback_usdc_total").add(usdcAmount, { wallet: sender });
-    ctx.meter.Counter("buyback_move_total").add(moveAmount, { wallet: sender });
-    ctx.meter.Gauge("buyback_price").record(pricePerMove, { wallet: sender });
   },
   { includeFailed: false }
 );
