@@ -6,7 +6,6 @@ const MOSAIC_ROUTER = "0x3f7399a0d3d646ce94ee0badf16c4c3f3c656fe3a5e142e83b5ebc0
 
 // Token addresses
 const USDC_ADDRESS = "0x83121c9f9b0527d1f056e21a950d6bf3b9e9e2e8353d0e95ccea726713cbea39";
-const MOVE_ADDRESS = "0x1::aptos_coin::AptosCoin";
 
 // Token decimals
 const TOKEN_DECIMALS = {
@@ -71,6 +70,7 @@ interface SwapEventData {
 
 /**
  * Process Mosaic router swap events
+ * Using onTransaction to process all transactions and filter for SwapEvents
  */
 AptosModulesProcessor.bind({
   address: MOSAIC_ROUTER,
@@ -89,14 +89,30 @@ AptosModulesProcessor.bind({
       return;
     }
 
+    // Log that we're processing a transaction (for debugging)
+    let foundSwapEvent = false;
+
     for (const event of tx.events) {
       // Check if this is a Mosaic SwapEvent
-      if (!event.type.includes(`${MOSAIC_ROUTER}::router::SwapEvent`)) {
+      const eventType = event.type;
+      if (!eventType.includes(`${MOSAIC_ROUTER}::router::SwapEvent`)) {
         continue;
       }
 
+      foundSwapEvent = true;
       const eventData = event.data as SwapEventData;
       const sender = eventData.sender;
+
+      // Log all swap events for debugging
+      ctx.eventLogger.emit("swap_detected", {
+        txHash: tx.hash,
+        sender: sender,
+        inputAsset: eventData.input_asset,
+        outputAsset: eventData.output_asset,
+        inputAmount: eventData.input_amount,
+        outputAmount: eventData.output_amount,
+        isBuybackWallet: isBuybackWallet(sender),
+      });
 
       // Only process transactions from tracked buyback wallets
       if (!isBuybackWallet(sender)) {
