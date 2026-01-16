@@ -142,9 +142,9 @@ export async function GET(request: NextRequest) {
         const totalMoveReceived = buybacks.reduce((sum, b) => sum + b.moveAmount, 0);
         const transactionCount = buybacks.length;
         const averagePrice = totalMoveReceived > 0 ? totalUsdcSpent / totalMoveReceived : 0;
-        const lastBuyback = buybacks[0]?.timestamp 
-          ? new Date(buybacks[0].timestamp * 1000).toISOString() 
-          : null;
+        
+        // Get the last buyback with full details
+        const lastBuybackData = buybacks[0] || null;
 
         // Calculate 24h stats
         const now = Date.now() / 1000;
@@ -156,7 +156,13 @@ export async function GET(request: NextRequest) {
           totalTokens: totalMoveReceived,
           transactionCount,
           averagePrice,
-          lastBuyback,
+          // Return full lastBuyback object for proper time display
+          lastBuyback: lastBuybackData ? {
+            timestamp: lastBuybackData.timestamp,
+            moveAmount: lastBuybackData.moveAmount,
+            usdcAmount: lastBuybackData.usdcAmount,
+            txHash: lastBuybackData.txHash,
+          } : null,
           change24h: {
             usdcAmount: last24h.reduce((sum, b) => sum + b.usdcAmount, 0),
             moveAmount: last24h.reduce((sum, b) => sum + b.moveAmount, 0),

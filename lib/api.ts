@@ -26,13 +26,27 @@ export async function fetchBuybackStats(): Promise<APIResponse<BuybackStats>> {
         ((data.change24h.count / (data.transactionCount - data.change24h.count)) * 100) || 0 : 0,
     };
 
+    // Handle lastBuyback - it can be an object with timestamp or null
+    let lastBuybackTime: Date;
+    let lastBuybackAmount = 0;
+    
+    if (data.lastBuyback && data.lastBuyback.timestamp) {
+      // timestamp is in seconds, convert to milliseconds
+      lastBuybackTime = new Date(data.lastBuyback.timestamp * 1000);
+      lastBuybackAmount = data.lastBuyback.moveAmount || 0;
+    } else {
+      // No buybacks yet - set to a far past date so "NaN" doesn't show
+      lastBuybackTime = new Date(0);
+      lastBuybackAmount = 0;
+    }
+
     return {
       data: {
         totalBuybacksUSD: data.totalBuybacksUSD || 0,
         totalTokens: data.totalTokens || 0,
         transactionCount: data.transactionCount || 0,
-        lastBuybackTime: data.lastBuyback ? new Date(data.lastBuyback.timestamp * 1000) : new Date(),
-        lastBuybackAmount: data.lastBuyback?.moveAmount || 0,
+        lastBuybackTime,
+        lastBuybackAmount,
         percentageChange24h,
       },
       timestamp: Date.now(),

@@ -33,10 +33,19 @@ export function StatsCards() {
   }, []);
 
   const getTimeAgo = (date: Date) => {
+    // Check for invalid date or epoch (no buybacks)
+    if (!date || isNaN(date.getTime()) || date.getTime() === 0) {
+      return "No buybacks yet";
+    }
+    
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    
+    // If date is in the future or invalid, return placeholder
+    if (diffMs < 0) return "No buybacks yet";
+    
     const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
 
     if (diffMins < 1) return "Just now";
     if (diffMins < 60) return `${diffMins} min ago`;
