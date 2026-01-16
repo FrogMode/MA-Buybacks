@@ -75,7 +75,8 @@ interface SwapEventData {
 AptosModulesProcessor.bind({
   address: MOSAIC_ROUTER,
   network: AptosNetwork.MOVEMENT_MAIN_NET,
-  startVersion: 0n,
+  // Start from version 58000000 to speed up indexing (first TWAP swaps are around 58535191)
+  startVersion: 58000000n,
 }).onTransaction(
   async (tx: UserTransactionResponse, ctx: AptosContext) => {
     // Skip failed transactions
