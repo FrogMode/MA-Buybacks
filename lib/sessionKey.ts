@@ -1,17 +1,31 @@
 /**
- * TWAP Session Management with Vercel KV (Redis) persistence
+ * TWAP Session Management with Supabase persistence
  * 
  * This module manages TWAP sessions for the delegated execution model.
  * Users deposit USDC to the executor wallet, and the backend executes
  * trades on their behalf, returning MOVE to their wallet.
  */
 
-import { kv } from "@vercel/kv";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
-// Session key prefix for KV storage
-const SESSION_PREFIX = "twap:session:";
-const USER_SESSIONS_PREFIX = "twap:user:";
+// Supabase client (lazy initialized)
+let supabase: SupabaseClient | null = null;
+
+function getSupabase(): SupabaseClient | null {
+  if (supabase) return supabase;
+  
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
+  
+  if (!url || !key) {
+    console.warn("[DB] Supabase not configured - sessions will not persist");
+    return null;
+  }
+  
+  supabase = createClient(url, key);
+  return supabase;
+}
 
 export interface TradeRecord {
   id: string;
@@ -62,11 +76,77 @@ export interface CreateSessionParams {
   slippageBps?: number;
 }
 
-/**
- * Check if KV is configured
- */
-function isKVConfigured(): boolean {
-  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+// Database row type (snake_case for Postgres)
+interface SessionRow {
+  id: string;
+  user_address: string;
+  deposit_tx_hash: string | null;
+  deposited_amount: number;
+  deposit_confirmed: boolean;
+  total_amount: number;
+  amount_per_trade: number;
+  num_trades: number;
+  trades_completed: number;
+  interval_minutes: number;
+  slippage_bps: number;
+  status: string;
+  created_at: number;
+  started_at: number | null;
+  next_trade_at: number | null;
+  expires_at: number;
+  total_move_received: number;
+  trades: TradeRecord[];
+  last_error: string | null;
+}
+
+// Convert DB row to session object
+function rowToSession(row: SessionRow): TWAPSession {
+  return {
+    id: row.id,
+    userAddress: row.user_address,
+    depositTxHash: row.deposit_tx_hash,
+    depositedAmount: row.deposited_amount,
+    depositConfirmed: row.deposit_confirmed,
+    totalAmount: row.total_amount,
+    amountPerTrade: row.amount_per_trade,
+    numTrades: row.num_trades,
+    tradesCompleted: row.trades_completed,
+    intervalMinutes: row.interval_minutes,
+    slippageBps: row.slippage_bps,
+    status: row.status as TWAPSession["status"],
+    createdAt: row.created_at,
+    startedAt: row.started_at,
+    nextTradeAt: row.next_trade_at,
+    expiresAt: row.expires_at,
+    totalMoveReceived: row.total_move_received,
+    trades: row.trades || [],
+    lastError: row.last_error,
+  };
+}
+
+// Convert session to DB row
+function sessionToRow(session: TWAPSession): SessionRow {
+  return {
+    id: session.id,
+    user_address: session.userAddress,
+    deposit_tx_hash: session.depositTxHash,
+    deposited_amount: session.depositedAmount,
+    deposit_confirmed: session.depositConfirmed,
+    total_amount: session.totalAmount,
+    amount_per_trade: session.amountPerTrade,
+    num_trades: session.numTrades,
+    trades_completed: session.tradesCompleted,
+    interval_minutes: session.intervalMinutes,
+    slippage_bps: session.slippageBps,
+    status: session.status,
+    created_at: session.createdAt,
+    started_at: session.startedAt,
+    next_trade_at: session.nextTradeAt,
+    expires_at: session.expiresAt,
+    total_move_received: session.totalMoveReceived,
+    trades: session.trades,
+    last_error: session.lastError,
+  };
 }
 
 /**
@@ -104,23 +184,19 @@ export async function createSession(params: CreateSessionParams): Promise<TWAPSe
     lastError: null,
   };
   
-  // Store session in KV
-  if (isKVConfigured()) {
+  const db = getSupabase();
+  if (db) {
     try {
-      // Store session with TTL matching expiration
-      const ttlSeconds = Math.ceil(totalDurationMs / 1000) + 3600; // Add 1 hour buffer
-      await kv.set(`${SESSION_PREFIX}${sessionId}`, session, { ex: ttlSeconds });
+      const { error } = await db
+        .from("twap_sessions")
+        .insert(sessionToRow(session));
       
-      // Add to user's session list
-      await kv.sadd(`${USER_SESSIONS_PREFIX}${userAddress.toLowerCase()}`, sessionId);
-      
-      console.log(`[KV] Created session ${sessionId} for user ${userAddress}`);
+      if (error) throw error;
+      console.log(`[DB] Created session ${sessionId} for user ${userAddress}`);
     } catch (error) {
-      console.error("[KV] Failed to store session:", error);
+      console.error("[DB] Failed to store session:", error);
       throw new Error("Failed to create session - storage error");
     }
-  } else {
-    console.warn("[KV] Vercel KV not configured - sessions will not persist across function invocations");
   }
   
   return session;
@@ -140,14 +216,25 @@ export async function confirmDeposit(sessionId: string, txHash: string, amount: 
   session.startedAt = Date.now();
   session.nextTradeAt = Date.now(); // Execute first trade immediately
   
-  // Update in KV
-  if (isKVConfigured()) {
+  const db = getSupabase();
+  if (db) {
     try {
-      const ttlSeconds = Math.ceil((session.expiresAt - Date.now()) / 1000) + 3600;
-      await kv.set(`${SESSION_PREFIX}${sessionId}`, session, { ex: ttlSeconds });
-      console.log(`[KV] Confirmed deposit for session ${sessionId}`);
+      const { error } = await db
+        .from("twap_sessions")
+        .update({
+          deposit_tx_hash: txHash,
+          deposited_amount: amount,
+          deposit_confirmed: true,
+          status: "active",
+          started_at: session.startedAt,
+          next_trade_at: session.nextTradeAt,
+        })
+        .eq("id", sessionId);
+      
+      if (error) throw error;
+      console.log(`[DB] Confirmed deposit for session ${sessionId}`);
     } catch (error) {
-      console.error("[KV] Failed to update session:", error);
+      console.error("[DB] Failed to update session:", error);
     }
   }
   
@@ -158,101 +245,117 @@ export async function confirmDeposit(sessionId: string, txHash: string, amount: 
  * Get a session by ID
  */
 export async function getSession(sessionId: string): Promise<TWAPSession | undefined> {
-  if (isKVConfigured()) {
-    try {
-      const session = await kv.get<TWAPSession>(`${SESSION_PREFIX}${sessionId}`);
-      return session || undefined;
-    } catch (error) {
-      console.error("[KV] Failed to get session:", error);
-      return undefined;
-    }
+  const db = getSupabase();
+  if (!db) return undefined;
+  
+  try {
+    const { data, error } = await db
+      .from("twap_sessions")
+      .select("*")
+      .eq("id", sessionId)
+      .single();
+    
+    if (error || !data) return undefined;
+    return rowToSession(data as SessionRow);
+  } catch (error) {
+    console.error("[DB] Failed to get session:", error);
+    return undefined;
   }
-  return undefined;
 }
 
 /**
  * Get all sessions (for admin/debugging)
  */
 export async function getAllSessions(): Promise<TWAPSession[]> {
-  if (isKVConfigured()) {
-    try {
-      const keys = await kv.keys(`${SESSION_PREFIX}*`);
-      if (keys.length === 0) return [];
-      
-      const sessions = await Promise.all(
-        keys.map(key => kv.get<TWAPSession>(key))
-      );
-      return sessions.filter((s): s is TWAPSession => s !== null);
-    } catch (error) {
-      console.error("[KV] Failed to get all sessions:", error);
-      return [];
-    }
+  const db = getSupabase();
+  if (!db) return [];
+  
+  try {
+    const { data, error } = await db
+      .from("twap_sessions")
+      .select("*")
+      .order("created_at", { ascending: false });
+    
+    if (error || !data) return [];
+    return data.map((row: SessionRow) => rowToSession(row));
+  } catch (error) {
+    console.error("[DB] Failed to get all sessions:", error);
+    return [];
   }
-  return [];
 }
 
 /**
  * Get active sessions that need trade execution
  */
 export async function getActiveSessionsForExecution(): Promise<TWAPSession[]> {
-  const now = Date.now();
-  const allSessions = await getAllSessions();
+  const db = getSupabase();
+  if (!db) return [];
   
-  return allSessions.filter(session => 
-    session.status === "active" &&
-    session.depositConfirmed &&
-    session.nextTradeAt !== null &&
-    session.nextTradeAt <= now &&
-    session.tradesCompleted < session.numTrades &&
-    session.expiresAt > now
-  );
+  const now = Date.now();
+  
+  try {
+    const { data, error } = await db
+      .from("twap_sessions")
+      .select("*")
+      .eq("status", "active")
+      .eq("deposit_confirmed", true)
+      .lte("next_trade_at", now)
+      .gt("expires_at", now);
+    
+    if (error || !data) return [];
+    
+    // Filter sessions that still have trades remaining
+    return data
+      .map((row: SessionRow) => rowToSession(row))
+      .filter(s => s.tradesCompleted < s.numTrades);
+  } catch (error) {
+    console.error("[DB] Failed to get active sessions:", error);
+    return [];
+  }
 }
 
 /**
  * Get sessions by user address
  */
 export async function getSessionsByUser(userAddress: string): Promise<TWAPSession[]> {
-  if (isKVConfigured()) {
-    try {
-      const sessionIds = await kv.smembers(`${USER_SESSIONS_PREFIX}${userAddress.toLowerCase()}`);
-      if (!sessionIds || sessionIds.length === 0) return [];
-      
-      const sessions = await Promise.all(
-        sessionIds.map(id => kv.get<TWAPSession>(`${SESSION_PREFIX}${id}`))
-      );
-      return sessions.filter((s): s is TWAPSession => s !== null);
-    } catch (error) {
-      console.error("[KV] Failed to get user sessions:", error);
-      return [];
-    }
+  const db = getSupabase();
+  if (!db) return [];
+  
+  try {
+    const { data, error } = await db
+      .from("twap_sessions")
+      .select("*")
+      .ilike("user_address", userAddress)
+      .order("created_at", { ascending: false });
+    
+    if (error || !data) return [];
+    return data.map((row: SessionRow) => rowToSession(row));
+  } catch (error) {
+    console.error("[DB] Failed to get user sessions:", error);
+    return [];
   }
-  return [];
 }
 
 /**
  * Delete/cancel a session
  */
 export async function deleteSession(sessionId: string): Promise<boolean> {
-  const session = await getSession(sessionId);
-  if (!session) return false;
+  const db = getSupabase();
+  if (!db) return false;
   
-  if (isKVConfigured()) {
-    try {
-      // Update status to cancelled
-      session.status = "cancelled";
-      await kv.set(`${SESSION_PREFIX}${sessionId}`, session, { ex: 3600 }); // Keep for 1 hour
-      
-      // Remove from user's session list
-      await kv.srem(`${USER_SESSIONS_PREFIX}${session.userAddress.toLowerCase()}`, sessionId);
-      
-      console.log(`[KV] Cancelled session ${sessionId}`);
-      return true;
-    } catch (error) {
-      console.error("[KV] Failed to delete session:", error);
-      return false;
-    }
+  try {
+    const { error } = await db
+      .from("twap_sessions")
+      .update({ status: "cancelled" })
+      .eq("id", sessionId);
+    
+    if (error) throw error;
+    console.log(`[DB] Cancelled session ${sessionId}`);
+    return true;
+  } catch (error) {
+    console.error("[DB] Failed to delete session:", error);
+    return false;
   }
-  return false;
 }
 
 /**
@@ -285,14 +388,25 @@ export async function recordTrade(sessionId: string, trade: TradeRecord): Promis
     }
   }
   
-  // Update in KV
-  if (isKVConfigured()) {
+  const db = getSupabase();
+  if (db) {
     try {
-      const ttlSeconds = Math.ceil((session.expiresAt - Date.now()) / 1000) + 3600;
-      await kv.set(`${SESSION_PREFIX}${sessionId}`, session, { ex: ttlSeconds });
-      console.log(`[KV] Recorded trade for session ${sessionId} - ${session.tradesCompleted}/${session.numTrades}`);
+      const { error } = await db
+        .from("twap_sessions")
+        .update({
+          trades: session.trades,
+          trades_completed: session.tradesCompleted,
+          total_move_received: session.totalMoveReceived,
+          status: session.status,
+          next_trade_at: session.nextTradeAt,
+          last_error: session.lastError,
+        })
+        .eq("id", sessionId);
+      
+      if (error) throw error;
+      console.log(`[DB] Recorded trade for session ${sessionId} - ${session.tradesCompleted}/${session.numTrades}`);
     } catch (error) {
-      console.error("[KV] Failed to record trade:", error);
+      console.error("[DB] Failed to record trade:", error);
     }
   }
   
@@ -303,30 +417,27 @@ export async function recordTrade(sessionId: string, trade: TradeRecord): Promis
  * Clean up expired sessions
  */
 export async function cleanupExpiredSessions(): Promise<number> {
+  const db = getSupabase();
+  if (!db) return 0;
+  
   const now = Date.now();
-  let cleaned = 0;
   
-  const allSessions = await getAllSessions();
-  
-  for (const session of allSessions) {
-    if (session.expiresAt < now && session.status !== "completed") {
-      session.status = "failed";
-      session.lastError = "Session expired";
-      
-      if (isKVConfigured()) {
-        try {
-          // Keep expired sessions for 1 hour for debugging
-          await kv.set(`${SESSION_PREFIX}${session.id}`, session, { ex: 3600 });
-          await kv.srem(`${USER_SESSIONS_PREFIX}${session.userAddress.toLowerCase()}`, session.id);
-          cleaned++;
-        } catch (error) {
-          console.error("[KV] Failed to cleanup session:", error);
-        }
-      }
-    }
+  try {
+    const { data, error } = await db
+      .from("twap_sessions")
+      .update({ status: "failed", last_error: "Session expired" })
+      .lt("expires_at", now)
+      .neq("status", "completed")
+      .neq("status", "failed")
+      .neq("status", "cancelled")
+      .select();
+    
+    if (error) throw error;
+    return data?.length || 0;
+  } catch (error) {
+    console.error("[DB] Failed to cleanup sessions:", error);
+    return 0;
   }
-  
-  return cleaned;
 }
 
 /**
