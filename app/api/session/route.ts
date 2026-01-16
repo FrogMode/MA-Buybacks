@@ -13,11 +13,36 @@ import {
 } from "@/lib/executorWallet";
 
 // Security constants
-const MAX_TOTAL_AMOUNT = 100000; // Max $100k USDC per session
+const MAX_TOTAL_AMOUNT = 10000;  // Max $10k USDC per session (reduced for safety)
 const MIN_TOTAL_AMOUNT = 1;      // Min $1 USDC
-const MAX_NUM_TRADES = 1000;     // Max 1000 trades per session
+const MAX_NUM_TRADES = 100;      // Max 100 trades per session (reduced)
 const MIN_INTERVAL_MINUTES = 1;  // Min 1 minute between trades
 const MAX_SLIPPAGE_BPS = 500;    // Max 5% slippage
+const MAX_SESSIONS_PER_USER = 5; // Max total sessions per user (including completed)
+
+// Rate limiting (simple in-memory, resets on cold start)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 10; // 10 requests per minute per IP
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const record = rateLimitMap.get(ip);
+  
+  if (!record || now > record.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+  
+  record.count++;
+  return record.count > RATE_LIMIT_MAX_REQUESTS;
+}
+
+function getClientIP(request: NextRequest): string {
+  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || 
+         request.headers.get("x-real-ip") || 
+         "unknown";
+}
 
 /**
  * Validate Aptos address format
@@ -32,6 +57,16 @@ function isValidAptosAddress(address: string): boolean {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting
+    const clientIP = getClientIP(request);
+    if (isRateLimited(clientIP)) {
+      console.warn(`[SESSION] Rate limited: ${clientIP}`);
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { 
       userAddress, 
@@ -107,8 +142,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check for existing active sessions for this user (limit to 1 active session per user)
+    // Check for existing sessions for this user
     const existingSessions = await getSessionsByUser(userAddress);
+    
+    // Limit total sessions per user (prevent spam)
+    if (existingSessions.length >= MAX_SESSIONS_PER_USER) {
+      return NextResponse.json(
+        { error: "Maximum session limit reached. Please wait for existing sessions to complete." },
+        { status: 429 }
+      );
+    }
+    
+    // Check for active session (limit to 1 active session per user)
     const activeSession = existingSessions.find(
       s => s.status === "active" || s.status === "awaiting_deposit"
     );
@@ -232,6 +277,12 @@ export async function GET(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
+    // Rate limiting
+    const clientIP = getClientIP(request);
+    if (isRateLimited(clientIP)) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const sessionId = searchParams.get("id");
     const userAddress = searchParams.get("userAddress");
@@ -239,6 +290,21 @@ export async function DELETE(request: NextRequest) {
     if (!sessionId) {
       return NextResponse.json(
         { error: "Session ID required" },
+        { status: 400 }
+      );
+    }
+
+    // SECURITY: userAddress is REQUIRED for ownership verification
+    if (!userAddress) {
+      return NextResponse.json(
+        { error: "userAddress required for authorization" },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidAptosAddress(userAddress)) {
+      return NextResponse.json(
+        { error: "Invalid wallet address format" },
         { status: 400 }
       );
     }
@@ -252,8 +318,9 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Verify the requester owns this session (basic check - in production use proper auth)
-    if (userAddress && session.userAddress.toLowerCase() !== userAddress.toLowerCase()) {
+    // SECURITY: Verify the requester owns this session
+    if (session.userAddress.toLowerCase() !== userAddress.toLowerCase()) {
+      console.warn(`[SESSION] Unauthorized delete attempt: ${userAddress} tried to delete session owned by ${session.userAddress}`);
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 403 }
@@ -268,6 +335,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    console.log(`[SESSION] Session ${sessionId} cancelled by owner ${userAddress}`);
     return NextResponse.json({
       success: true,
       message: "Session cancelled",
@@ -286,12 +354,33 @@ export async function DELETE(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
+    // Rate limiting
+    const clientIP = getClientIP(request);
+    if (isRateLimited(clientIP)) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+
     const body = await request.json();
     const { sessionId, action, txHash, amount, userAddress } = body;
 
     if (!sessionId) {
       return NextResponse.json(
         { error: "Session ID required" },
+        { status: 400 }
+      );
+    }
+
+    // SECURITY: userAddress is REQUIRED for ownership verification
+    if (!userAddress) {
+      return NextResponse.json(
+        { error: "userAddress required for authorization" },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidAptosAddress(userAddress)) {
+      return NextResponse.json(
+        { error: "Invalid wallet address format" },
         { status: 400 }
       );
     }
@@ -304,8 +393,9 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // Verify ownership (basic check)
-    if (userAddress && session.userAddress.toLowerCase() !== userAddress.toLowerCase()) {
+    // SECURITY: Verify the requester owns this session
+    if (session.userAddress.toLowerCase() !== userAddress.toLowerCase()) {
+      console.warn(`[SESSION] Unauthorized update attempt: ${userAddress} tried to update session owned by ${session.userAddress}`);
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 403 }

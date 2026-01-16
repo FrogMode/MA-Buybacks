@@ -9,6 +9,35 @@ const aptosConfig = new AptosConfig({
 });
 const aptos = new Aptos(aptosConfig);
 
+// Rate limiting for gas sponsorship (prevent abuse)
+const sponsorRateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const SPONSOR_RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const SPONSOR_RATE_LIMIT_MAX = 5; // 5 sponsored transactions per minute per address
+
+function isSponsorRateLimited(address: string): boolean {
+  const now = Date.now();
+  const key = address.toLowerCase();
+  const record = sponsorRateLimitMap.get(key);
+  
+  if (!record || now > record.resetAt) {
+    sponsorRateLimitMap.set(key, { count: 1, resetAt: now + SPONSOR_RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+  
+  record.count++;
+  return record.count > SPONSOR_RATE_LIMIT_MAX;
+}
+
+// Allowed functions for sponsorship (whitelist)
+const ALLOWED_SPONSOR_FUNCTIONS = [
+  "0x1::primary_fungible_store::transfer",
+  "0x1::aptos_account::transfer",
+];
+
+function isAllowedFunction(fn: string): boolean {
+  return ALLOWED_SPONSOR_FUNCTIONS.some(allowed => fn.startsWith(allowed));
+}
+
 /**
  * POST /api/sponsor
  * 
@@ -63,6 +92,32 @@ async function handleSponsor(body: {
     return NextResponse.json(
       { error: "Missing required fields: senderAddress, txFunction" },
       { status: 400 }
+    );
+  }
+
+  // SECURITY: Validate address format
+  if (!/^0x[a-fA-F0-9]{1,64}$/.test(senderAddress)) {
+    return NextResponse.json(
+      { error: "Invalid sender address format" },
+      { status: 400 }
+    );
+  }
+
+  // SECURITY: Rate limit per sender address
+  if (isSponsorRateLimited(senderAddress)) {
+    console.warn(`[SPONSOR] Rate limited: ${senderAddress}`);
+    return NextResponse.json(
+      { error: "Too many sponsorship requests. Please wait." },
+      { status: 429 }
+    );
+  }
+
+  // SECURITY: Only allow whitelisted functions
+  if (!isAllowedFunction(txFunction)) {
+    console.warn(`[SPONSOR] Blocked non-whitelisted function: ${txFunction} from ${senderAddress}`);
+    return NextResponse.json(
+      { error: "Function not allowed for sponsorship" },
+      { status: 403 }
     );
   }
 
