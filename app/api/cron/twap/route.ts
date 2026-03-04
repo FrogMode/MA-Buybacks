@@ -11,10 +11,15 @@ import {
   isExecutorConfigured,
   getExecutorBalances 
 } from "@/lib/executorWallet";
+import {
+  acquireCronLock,
+  releaseCronLock,
+  extendCronLock,
+} from "@/lib/cronLock";
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
-// Security: Track last execution to prevent rapid-fire calls
+// Security: Track last execution to prevent rapid-fire calls (backup, in-memory)
 let lastExecutionTime = 0;
 const MIN_EXECUTION_INTERVAL_MS = 30000; // 30 seconds minimum between executions
 
@@ -58,6 +63,7 @@ function isAuthorizedCronRequest(request: NextRequest): boolean {
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
   const requestId = `cron-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  let lockAcquired = false;
   
   try {
     // Security: Verify authorization
@@ -66,16 +72,28 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Security: Rate limiting
+    // Security: In-memory rate limiting (backup)
     const timeSinceLastExecution = Date.now() - lastExecutionTime;
     if (timeSinceLastExecution < MIN_EXECUTION_INTERVAL_MS) {
-      console.warn(`[${requestId}] Rate limited - last execution was ${timeSinceLastExecution}ms ago`);
+      console.warn(`[${requestId}] In-memory rate limited - last execution was ${timeSinceLastExecution}ms ago`);
       return NextResponse.json({
         success: false,
         error: "Rate limited",
         retryAfter: Math.ceil((MIN_EXECUTION_INTERVAL_MS - timeSinceLastExecution) / 1000),
       }, { status: 429 });
     }
+
+    // SECURITY: Acquire distributed lock to prevent concurrent executions
+    const lockId = await acquireCronLock(requestId);
+    if (!lockId) {
+      console.log(`[${requestId}] Could not acquire lock - another execution in progress`);
+      return NextResponse.json({
+        success: false,
+        error: "Another execution in progress",
+      }, { status: 409 }); // Conflict
+    }
+    lockAcquired = true;
+
     lastExecutionTime = Date.now();
 
     // Check if executor is configured
@@ -87,7 +105,7 @@ export async function GET(request: NextRequest) {
       }, { status: 503 });
     }
 
-    console.log(`[${requestId}] Starting TWAP cron execution`);
+    console.log(`[${requestId}] Starting TWAP cron execution (lock acquired)`);
 
     // Clean up expired sessions first
     const cleaned = await cleanupExpiredSessions();
@@ -161,6 +179,11 @@ export async function GET(request: NextRequest) {
 
     console.log(`[${requestId}] Execution complete - Success: ${successCount}, Failed: ${failCount}, Duration: ${Date.now() - startTime}ms`);
 
+    // Release lock and return success
+    if (lockAcquired) {
+      await releaseCronLock(requestId);
+    }
+
     // Return minimal info (don't expose internal details)
     return NextResponse.json({
       success: true,
@@ -171,6 +194,12 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error(`[${requestId}] Cron job error:`, error);
+    
+    // Always release lock on error
+    if (lockAcquired) {
+      await releaseCronLock(requestId);
+    }
+    
     return NextResponse.json(
       { 
         success: false,

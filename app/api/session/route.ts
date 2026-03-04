@@ -426,13 +426,39 @@ export async function PATCH(request: NextRequest) {
         );
       }
 
-      const depositAmount = amount || session.totalAmount;
+      // SECURITY: Verify the deposit actually happened on-chain
+      const { verifyDeposit } = await import("@/lib/depositVerification");
+      
+      console.log(`[SESSION] Verifying deposit ${txHash} for session ${sessionId}`);
+      
+      const verification = await verifyDeposit(
+        txHash,
+        session.totalAmount,
+        session.userAddress // Verify sender matches session owner
+      );
+
+      if (!verification.valid) {
+        console.warn(`[SESSION] Deposit verification FAILED for ${sessionId}: ${verification.error}`);
+        return NextResponse.json(
+          { 
+            error: "Deposit verification failed", 
+            details: verification.error,
+            // Don't expose too much info to potential attackers
+          },
+          { status: 400 }
+        );
+      }
+
+      console.log(`[SESSION] Deposit verified: ${verification.actualAmount} USDC from ${verification.sender}`);
+
+      // Use the verified amount (not user-provided)
+      const depositAmount = verification.actualAmount || session.totalAmount;
       const updatedSession = await confirmDeposit(sessionId, txHash, depositAmount);
 
       return NextResponse.json({
         success: true,
         session: sanitizeSession(updatedSession!),
-        message: "Deposit confirmed. TWAP execution will begin shortly.",
+        message: "Deposit verified and confirmed. TWAP execution will begin shortly.",
       });
     }
 
