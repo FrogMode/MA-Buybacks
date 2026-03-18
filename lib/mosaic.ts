@@ -112,7 +112,7 @@ export function fromRawAmount(rawAmount: number | string, decimals: number): num
 export function formatQuote(quote: MosaicQuoteResponse, srcDecimals: number, dstDecimals: number) {
   const srcAmount = fromRawAmount(quote.data.srcAmount, srcDecimals);
   const dstAmount = fromRawAmount(quote.data.dstAmount, dstDecimals);
-  const rate = dstAmount / srcAmount;
+  const rate = srcAmount > 0 ? dstAmount / srcAmount : 0;
   
   return {
     srcAmount,

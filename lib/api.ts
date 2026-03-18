@@ -16,14 +16,23 @@ export async function fetchBuybackStats(): Promise<APIResponse<BuybackStats>> {
     const data = await response.json();
     
     // Calculate percentage changes (comparing 24h to previous period)
-    // For now, we'll show the 24h values as the change
+    // SECURITY FIX: Handle divide-by-zero when all activity is in last 24h
+    const safePercentChange = (current: number, total: number): number => {
+      const previous = total - current;
+      if (previous <= 0) {
+        // All activity in current period - show 100% if there's activity, 0 otherwise
+        return current > 0 ? 100 : 0;
+      }
+      const change = (current / previous) * 100;
+      // Cap at reasonable values and handle Infinity/NaN
+      if (!isFinite(change)) return current > 0 ? 100 : 0;
+      return Math.min(Math.max(change, -100), 1000); // Cap between -100% and 1000%
+    };
+
     const percentageChange24h = {
-      buybacks: data.change24h?.usdcAmount > 0 ? 
-        ((data.change24h.usdcAmount / (data.totalBuybacksUSD - data.change24h.usdcAmount)) * 100) || 0 : 0,
-      tokens: data.change24h?.moveAmount > 0 ?
-        ((data.change24h.moveAmount / (data.totalTokens - data.change24h.moveAmount)) * 100) || 0 : 0,
-      transactions: data.change24h?.count > 0 ?
-        ((data.change24h.count / (data.transactionCount - data.change24h.count)) * 100) || 0 : 0,
+      buybacks: safePercentChange(data.change24h?.usdcAmount || 0, data.totalBuybacksUSD || 0),
+      tokens: safePercentChange(data.change24h?.moveAmount || 0, data.totalTokens || 0),
+      transactions: safePercentChange(data.change24h?.count || 0, data.transactionCount || 0),
     };
 
     // Handle lastBuyback - it can be an object with timestamp or null

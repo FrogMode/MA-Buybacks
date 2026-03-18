@@ -75,8 +75,8 @@ export function TWAPConfig({
   const aptosClientRef = useRef<Aptos | null>(null);
 
   const totalTradesNum = parseInt(numTrades, 10) || 0;
-  const amountPerTrade = parseFloat(totalAmount) / totalTradesNum || 0;
-  const progress = session 
+  const amountPerTrade = totalTradesNum > 0 ? parseFloat(totalAmount) / totalTradesNum : 0;
+  const progress = session && session.numTrades > 0
     ? (session.tradesCompleted / session.numTrades) * 100 
     : 0;
 

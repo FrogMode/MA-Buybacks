@@ -107,23 +107,29 @@ This caused accounting errors and potential double-swaps.
 
 ---
 
-### MEDIUM-1: Divide by Zero ⏳ TODO
+### MEDIUM-1: Divide by Zero ✅ FIXED
 
-**Status:** ⏳ Pending
+**Status:** ✅ Fixed
 
 **Description:**
-Percentage change metrics return Infinity in first 24 hours when historical data doesn't exist.
+Percentage change metrics return Infinity in first 24 hours when all buybacks are recent (denominator becomes 0).
 
-**Location:** TBD (likely in stats/analytics endpoints)
+**Locations fixed:**
+- `lib/api.ts` - percentageChange24h calculations
+- `components/twap/TWAPConfig.tsx` - amountPerTrade, progress calculations
+- `lib/mosaic.ts` - rate calculation
 
-**Fix needed:** Handle edge case where denominator is 0
+**Fix:**
+- Added `safePercentChange()` helper that handles 0 denominators
+- Added explicit `> 0` checks before all divisions
+- Returns 100% when all activity is in current period, 0 when no activity
 
 ---
 
 ## Remaining Work
 
 1. **Frontend wallet signing** — Integrate wallet signature verification for PATCH/DELETE
-2. **Divide by zero** — Find and fix the percentage calculation
+2. ~~**Divide by zero** — Find and fix the percentage calculation~~ ✅ Done
 3. **Production testing** — Test all fixes in staging environment
 4. **Redis for nonces** — Replace in-memory nonce tracking with Redis
 
