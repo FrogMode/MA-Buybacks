@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { TWAPStatus, TradeExecution } from "@/types/twap";
 import { TOKENS, TOKEN_DECIMALS, toRawAmount } from "@/lib/mosaic";
+import { createAuthMessage } from "@/lib/walletAuthClient";
 
 interface TWAPConfigProps {
   onStatusChange: (status: TWAPStatus) => void;
@@ -56,7 +57,7 @@ export function TWAPConfig({
   onStatusChange,
   onTradeExecuted,
 }: TWAPConfigProps) {
-  const { connected, account, signAndSubmitTransaction } = useWallet();
+  const { connected, account, signAndSubmitTransaction, signMessage } = useWallet();
   const [totalAmount, setTotalAmount] = useState("5");
   const [numTrades, setNumTrades] = useState("5");
   const [intervalMinutes, setIntervalMinutes] = useState("1");
@@ -290,6 +291,26 @@ export function TWAPConfig({
         });
       }
 
+      // Sign authentication message to prove wallet ownership
+      let authData: any = { userAddress: account.address.toString() };
+      
+      if (signMessage) {
+        try {
+          const { message, payload } = createAuthMessage("confirm_deposit", session.id);
+          const signResult = await signMessage({ message, nonce: payload.nonce });
+          authData = {
+            userAddress: account.address.toString(),
+            auth: {
+              payload: { ...payload, address: account.address.toString() },
+              signature: signResult.signature,
+              fullMessage: signResult.fullMessage,
+            },
+          };
+        } catch (signError) {
+          console.warn("Wallet signing not supported, using simple auth:", signError);
+        }
+      }
+
       // Confirm deposit with backend
       const confirmResponse = await fetch("/api/session", {
         method: "PATCH",
@@ -299,7 +320,7 @@ export function TWAPConfig({
           action: "confirm_deposit",
           txHash: response.hash,
           amount: session.totalAmount,
-          userAddress: account.address.toString(),
+          ...authData,
         }),
       });
 
@@ -327,6 +348,26 @@ export function TWAPConfig({
 
           const { session: newSession } = await recreateResponse.json();
           
+          // Sign authentication for the new session
+          let reconfirmAuthData: any = { userAddress: account.address.toString() };
+          
+          if (signMessage) {
+            try {
+              const { message, payload } = createAuthMessage("confirm_deposit", newSession.id);
+              const signResult = await signMessage({ message, nonce: payload.nonce });
+              reconfirmAuthData = {
+                userAddress: account.address.toString(),
+                auth: {
+                  payload: { ...payload, address: account.address.toString() },
+                  signature: signResult.signature,
+                  fullMessage: signResult.fullMessage,
+                },
+              };
+            } catch (signError) {
+              console.warn("Wallet signing not supported for reconfirm:", signError);
+            }
+          }
+
           // Now confirm the deposit on the new session
           const reconfirmResponse = await fetch("/api/session", {
             method: "PATCH",
@@ -336,7 +377,7 @@ export function TWAPConfig({
               action: "confirm_deposit",
               txHash: response.hash,
               amount: session.totalAmount,
-              userAddress: account.address.toString(),
+              ...reconfirmAuthData,
             }),
           });
 
@@ -364,10 +405,28 @@ export function TWAPConfig({
   };
 
   const handleStop = async () => {
-    if (!session?.id) return;
+    if (!session?.id || !account) return;
 
     try {
-      await fetch(`/api/session?id=${session.id}`, { method: "DELETE" });
+      // Sign authentication message to prove wallet ownership
+      let authParams = `&userAddress=${account.address.toString()}`;
+      
+      if (signMessage) {
+        try {
+          const { message, payload } = createAuthMessage("cancel_session", session.id);
+          const signResult = await signMessage({ message, nonce: payload.nonce });
+          // For DELETE, we pass auth in query params (encoded)
+          const authData = {
+            payload: { ...payload, address: account.address.toString() },
+            signature: signResult.signature,
+          };
+          authParams = `&userAddress=${account.address.toString()}&auth=${encodeURIComponent(JSON.stringify(authData))}`;
+        } catch (signError) {
+          console.warn("Wallet signing not supported for cancel:", signError);
+        }
+      }
+
+      await fetch(`/api/session?id=${session.id}${authParams}`, { method: "DELETE" });
       setSession(null);
       stopPolling();
       

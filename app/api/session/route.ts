@@ -286,6 +286,7 @@ export async function DELETE(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const sessionId = searchParams.get("id");
     const userAddress = searchParams.get("userAddress");
+    const authParam = searchParams.get("auth");
 
     if (!sessionId) {
       return NextResponse.json(
@@ -318,7 +319,41 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // SECURITY: Verify the requester owns this session
+    // SECURITY: Verify wallet ownership via signature (if provided)
+    if (authParam) {
+      try {
+        const auth = JSON.parse(decodeURIComponent(authParam));
+        if (auth && auth.signature) {
+          const { verifyWalletSignature } = await import("@/lib/walletAuth");
+          const verification = verifyWalletSignature(auth);
+          
+          if (!verification.valid) {
+            console.warn(`[SESSION] DELETE signature verification failed: ${verification.error}`);
+            return NextResponse.json(
+              { error: "Signature verification failed" },
+              { status: 403 }
+            );
+          }
+          
+          if (verification.address?.toLowerCase() !== userAddress.toLowerCase()) {
+            console.warn(`[SESSION] DELETE address mismatch in signature`);
+            return NextResponse.json(
+              { error: "Address mismatch" },
+              { status: 403 }
+            );
+          }
+          
+          console.log(`[SESSION] DELETE signature verified for ${userAddress}`);
+        }
+      } catch (error) {
+        console.warn(`[SESSION] Could not parse auth param:`, error);
+        // Fall back to simple verification
+      }
+    } else {
+      console.warn(`[SESSION] DELETE using simple auth (no signature) for ${userAddress}`);
+    }
+
+    // SECURITY: Verify the requester claims to own this session
     if (session.userAddress.toLowerCase() !== userAddress.toLowerCase()) {
       console.warn(`[SESSION] Unauthorized delete attempt: ${userAddress} tried to delete session owned by ${session.userAddress}`);
       return NextResponse.json(
@@ -361,7 +396,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { sessionId, action, txHash, amount, userAddress } = body;
+    const { sessionId, action, txHash, amount, userAddress, auth } = body;
 
     if (!sessionId) {
       return NextResponse.json(
@@ -393,7 +428,41 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // SECURITY: Verify the requester owns this session
+    // SECURITY: Verify wallet ownership via signature (if provided)
+    // TODO: When all wallets support signMessage, make this required
+    if (auth && auth.signature) {
+      try {
+        const { verifyWalletSignature } = await import("@/lib/walletAuth");
+        const verification = verifyWalletSignature(auth);
+        
+        if (!verification.valid) {
+          console.warn(`[SESSION] Signature verification failed: ${verification.error}`);
+          return NextResponse.json(
+            { error: "Signature verification failed" },
+            { status: 403 }
+          );
+        }
+        
+        // Verify the signed address matches the claimed address
+        if (verification.address?.toLowerCase() !== userAddress.toLowerCase()) {
+          console.warn(`[SESSION] Address mismatch in signature`);
+          return NextResponse.json(
+            { error: "Address mismatch" },
+            { status: 403 }
+          );
+        }
+        
+        console.log(`[SESSION] Wallet signature verified for ${userAddress}`);
+      } catch (error) {
+        console.error(`[SESSION] Signature verification error:`, error);
+        // Fall back to simple verification for now
+      }
+    } else {
+      // Log that we're using simple auth (for monitoring)
+      console.warn(`[SESSION] PATCH using simple auth (no signature) for ${userAddress}`);
+    }
+
+    // SECURITY: Verify the requester claims to own this session
     if (session.userAddress.toLowerCase() !== userAddress.toLowerCase()) {
       console.warn(`[SESSION] Unauthorized update attempt: ${userAddress} tried to update session owned by ${session.userAddress}`);
       return NextResponse.json(
