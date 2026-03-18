@@ -427,9 +427,25 @@ export async function PATCH(request: NextRequest) {
       }
 
       // SECURITY: Verify the deposit actually happened on-chain
-      const { verifyDeposit } = await import("@/lib/depositVerification");
+      const { verifyDeposit, isDepositAlreadyUsed } = await import("@/lib/depositVerification");
       
       console.log(`[SESSION] Verifying deposit ${txHash} for session ${sessionId}`);
+      
+      // SECURITY: Check for replay attacks - same tx used for multiple sessions
+      const checkDepositUsed = async (hash: string) => {
+        // Check all sessions for this tx hash
+        const { getSessionByDepositTx } = await import("@/lib/sessionKey");
+        return getSessionByDepositTx(hash);
+      };
+      
+      const isReplay = await isDepositAlreadyUsed(txHash, sessionId, checkDepositUsed);
+      if (isReplay) {
+        console.warn(`[SESSION] REPLAY ATTACK BLOCKED: ${txHash} already used`);
+        return NextResponse.json(
+          { error: "This transaction has already been used for another session" },
+          { status: 400 }
+        );
+      }
       
       const verification = await verifyDeposit(
         txHash,

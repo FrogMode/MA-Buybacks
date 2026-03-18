@@ -337,6 +337,29 @@ export async function getSessionsByUser(userAddress: string): Promise<TWAPSessio
 }
 
 /**
+ * Get session by deposit transaction hash
+ * Used to prevent replay attacks
+ */
+export async function getSessionByDepositTx(txHash: string): Promise<{ sessionId: string } | null> {
+  const db = getSupabase();
+  if (!db) return null;
+  
+  try {
+    const { data, error } = await db
+      .from("twap_sessions")
+      .select("id")
+      .eq("deposit_tx_hash", txHash)
+      .single();
+    
+    if (error || !data) return null;
+    return { sessionId: data.id };
+  } catch (error) {
+    console.error("[DB] Failed to check deposit tx:", error);
+    return null;
+  }
+}
+
+/**
  * Delete/cancel a session
  */
 export async function deleteSession(sessionId: string): Promise<boolean> {

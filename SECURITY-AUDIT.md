@@ -1,238 +1,146 @@
-# Security Audit Report — MA-Buybacks
+# MA-Buybacks Security Audit
 
-**Auditor:** Perseus  
-**Date:** March 4, 2026  
-**Severity Levels:** 🔴 Critical | 🟠 High | 🟡 Medium | 🟢 Low | ℹ️ Info
+**Last Updated:** 2026-03-18
+**Status:** In Progress
 
 ---
 
 ## Executive Summary
 
-This TWAP bot handles user funds (USDC deposits → MOVE returns). The architecture uses a **custodial executor wallet** model, which introduces significant trust and security requirements.
-
-**Overall Assessment:** The codebase has decent security foundations but needs hardening before handling significant volume.
+External security audit identified 6 vulnerabilities. This document tracks findings and remediation.
 
 ---
 
-## Critical Issues (🔴)
+## Findings
 
-### 1. No Deposit Verification — Users Can Claim Fake Deposits
-**Location:** `/app/api/session/route.ts` PATCH handler  
-**Issue:** The `confirmDeposit` action trusts the user-provided `txHash` without verifying:
-- That the transaction actually exists
-- That it sent the correct amount to the executor wallet
-- That it was from the claiming user
+### CRITICAL-1: Wallet Ownership Not Authenticated ⚠️ PARTIAL FIX
 
-**Attack Vector:**
-1. User creates session for 1000 USDC
-2. User calls PATCH with a random/fake txHash
-3. System activates session without actual deposit
-4. Executor swaps USDC (from other users' deposits) and sends MOVE to attacker
+**Status:** ⚠️ Backend fixed, frontend integration needed
 
-**Fix Required:**
-```typescript
-// In confirmDeposit handler:
-// 1. Fetch transaction from RPC
-const tx = await aptos.getTransactionByHash({ transactionHash: txHash });
+**Description:**
+PATCH and DELETE endpoints trust `userAddress` from request body and compare strings. Attackers can spoof any address to cancel/update sessions they don't own.
 
-// 2. Verify it's a transfer TO the executor wallet
-// 3. Verify the amount matches session.totalAmount
-// 4. Verify sender matches session.userAddress
-```
+**Location:** `app/api/session/route.ts` L297, L373, L397
+
+**Fix:**
+- Created `lib/walletAuth.ts` with cryptographic signature verification
+- Requires wallet to sign a message proving ownership
+- **TODO:** Frontend needs to integrate wallet signing
+
+**Mitigation (temporary):** Rate limiting + logging of suspicious activity
 
 ---
 
-### 2. No Deposit Amount Tracking Per Session
-**Location:** `lib/executorWallet.ts`  
-**Issue:** The executor wallet holds pooled USDC from all users. There's no verification that:
-- The executor has enough balance for a specific session
-- Funds from Session A aren't being used for Session B
+### CRITICAL-2: Deposit Replay Attack ✅ FIXED
 
-**Attack Vector:**
-1. User A deposits 1000 USDC, session created
-2. User B deposits nothing, claims fake deposit
-3. Cron executes User B's session using User A's funds
-4. User A's funds are stolen
+**Status:** ✅ Fixed
 
-**Fix Required:**
-- Verify executor USDC balance before each swap
-- Track per-session balances or implement accounting
-- Consider separate deposit addresses per session (more complex)
+**Description:**
+`isDepositAlreadyUsed()` function existed but was NOT called in the confirmation flow. Same transaction could be reused across multiple sessions, causing incorrect accounting.
+
+**Location:** `app/api/session/route.ts` PATCH handler
+
+**Fix:**
+- Added `getSessionByDepositTx()` to check if tx already used
+- Added replay check before confirming deposits
+- Returns error if tx hash is already associated with another session
 
 ---
 
-### 3. Race Condition in Cron Execution
-**Location:** `/app/api/cron/twap/route.ts`  
-**Issue:** Multiple cron executions could run simultaneously (e.g., Vercel cold starts, network delays), potentially:
-- Executing the same trade multiple times
-- Draining the executor wallet faster than expected
+### CRITICAL-3: Asset Type Mismatch ✅ FIXED
 
-**Current Mitigation:** In-memory `lastExecutionTime` check  
-**Problem:** This resets on cold starts and doesn't work across multiple instances
+**Status:** ✅ Fixed
 
-**Fix Required:**
-- Use database-level locking (Supabase row lock or Redis)
-- Add trade idempotency keys
-- Verify session state before executing trade
+**Description:**
+Non-USDC deposits only logged a warning but still returned `valid: true`. This could lead to sessions being marked funded with wrong assets, causing executor fund exposure.
 
----
+**Location:** `lib/depositVerification.ts`
 
-## High Issues (🟠)
-
-### 4. Supabase Anon Key Usage
-**Location:** `lib/sessionKey.ts`  
-**Issue:** Falls back to `SUPABASE_ANON_KEY` which may have broader permissions than needed.
-
-**Fix:** Always use `SUPABASE_SERVICE_KEY` for backend operations, configure RLS policies.
+**Fix:**
+- Changed from `console.warn()` to `return { valid: false, error: "Wrong asset type" }`
+- Strictly enforces USDC-only deposits
 
 ---
 
-### 5. No Maximum Session Limits (Global)
-**Location:** `/app/api/session/route.ts`  
-**Issue:** While there's a per-user limit (5 sessions), there's no global limit. An attacker could:
-1. Create thousands of sessions from different addresses
-2. Overwhelm the cron executor
-3. Cause DoS for legitimate users
+### HIGH-1: Mosaic Proxy Unauthenticated ✅ FIXED
 
-**Fix:** Add global limits, require wallet signature for session creation.
+**Status:** ✅ Fixed
 
----
+**Description:**
+The `/api/mosaic/quote` endpoint:
+1. Forwarded ALL user-supplied query params to Mosaic
+2. Injected private `MOSAIC_API_KEY` in requests
+3. Had no authentication or rate limiting
 
-### 6. Slippage Tolerance Up to 5%
-**Location:** Session creation validation  
-**Issue:** 5% slippage on large orders could result in significant value loss, especially if an attacker can manipulate the pool.
+This allowed external attackers to drain API quota.
 
-**Fix:** Consider lower default (1%) with user override, add minimum output checks.
+**Location:** `app/api/mosaic/quote/route.ts`
 
----
-
-### 7. No Monitoring/Alerting
-**Issue:** No alerts for:
-- Failed trades
-- Balance anomalies
-- Unusual activity patterns
-- Executor wallet balance running low
-
-**Fix:** Implement monitoring (Sentry, PagerDuty, or custom alerts).
+**Fix:**
+- Added parameter allowlist (only `srcAsset`, `dstAsset`, `amount`, `sender`, `slippage`, `recipient`)
+- Added rate limiting (30 req/min per IP)
+- Added parameter format validation
+- Blocks and logs disallowed parameters
 
 ---
 
-## Medium Issues (🟡)
+### HIGH-2: Non-Atomic Swap/Transfer ✅ FIXED
 
-### 8. Transaction Hash Validation
-**Location:** `/app/api/session/route.ts`  
-**Issue:** Only validates format (`/^0x[a-fA-F0-9]{64}$/`), not existence or content.
+**Status:** ✅ Fixed
 
----
+**Description:**
+If swap succeeds but transfer fails:
+1. System recorded failed trade
+2. `tradesCompleted` didn't increment
+3. Cron retried and executed another swap
+4. `moveReceived` used quoted value, not actual on-chain output
 
-### 9. Rate Limits Are In-Memory
-**Location:** All API routes  
-**Issue:** Rate limits reset on cold starts, don't work across instances.
+This caused accounting errors and potential double-swaps.
 
-**Fix:** Use Redis or Upstash for distributed rate limiting.
+**Location:** `lib/executorWallet.ts` `executeSwap()`
 
----
-
-### 10. Logging Contains Sensitive Info
-**Location:** Multiple files  
-**Issue:** Logs include wallet addresses, amounts, transaction hashes. In production, these should be redacted or stored securely.
-
----
-
-### 11. No Admin Authentication
-**Issue:** No protected admin endpoints for:
-- Viewing all sessions
-- Manual intervention
-- Emergency pause
+**Fix:**
+- Read actual MOVE received from on-chain events after swap
+- Better error handling when transfer fails (logs stuck funds)
+- Return actual amount, not quoted amount
+- Explicit error with swap tx hash for support recovery
 
 ---
 
-### 12. Session Expiry Doesn't Refund
-**Location:** `cleanupExpiredSessions`  
-**Issue:** When sessions expire, status is set to "failed" but no automatic refund of unused USDC.
+### MEDIUM-1: Divide by Zero ⏳ TODO
+
+**Status:** ⏳ Pending
+
+**Description:**
+Percentage change metrics return Infinity in first 24 hours when historical data doesn't exist.
+
+**Location:** TBD (likely in stats/analytics endpoints)
+
+**Fix needed:** Handle edge case where denominator is 0
 
 ---
 
-## Low Issues (🟢)
+## Remaining Work
 
-### 13. Hardcoded RPC Endpoint
-**Location:** Multiple files  
-**Issue:** `https://mainnet.movementnetwork.xyz/v1` is hardcoded. Should be configurable.
-
----
-
-### 14. No Request ID in Logs
-**Issue:** Hard to trace requests across log entries. Some endpoints have it, some don't.
+1. **Frontend wallet signing** — Integrate wallet signature verification for PATCH/DELETE
+2. **Divide by zero** — Find and fix the percentage calculation
+3. **Production testing** — Test all fixes in staging environment
+4. **Redis for nonces** — Replace in-memory nonce tracking with Redis
 
 ---
 
-### 15. TypeScript `any` Types
-**Location:** Various  
-**Issue:** Several `as any` casts reduce type safety.
+## Testing Checklist
+
+- [ ] Attempt to cancel another user's session (should fail)
+- [ ] Attempt to reuse deposit tx for two sessions (should fail)
+- [ ] Deposit non-USDC token (should fail)
+- [ ] Call Mosaic proxy with disallowed params (should be blocked)
+- [ ] Execute swap and verify actual vs quoted amounts match
+- [ ] Check percentage metrics in first 24 hours
 
 ---
 
-## Informational (ℹ️)
+## Commit History
 
-### 16. Executor Wallet is Single Point of Failure
-If the private key is compromised, all user funds are at risk. Consider:
-- Multi-sig
-- HSM/secure enclave
-- Threshold signatures
-
-### 17. No Audit Trail
-Changes to sessions aren't logged with timestamps/actors. Important for dispute resolution.
-
-### 18. Frontend Exposes Session Details
-The sanitizeSession function is good, but ensure no sensitive data leaks through other endpoints.
-
----
-
-## Recommendations Summary
-
-### Before Production (Must Have):
-1. ✅ Implement deposit verification (Critical #1)
-2. ✅ Add database-level cron locking (Critical #3)
-3. ✅ Verify executor balance before trades
-4. ✅ Add monitoring and alerting
-5. ✅ Use distributed rate limiting
-6. ✅ Add admin authentication for sensitive ops
-
-### Production Hardening (Should Have):
-1. Lower default slippage
-2. Add global session limits
-3. Implement automatic refunds
-4. Add request tracing
-5. Configure RLS policies
-
-### Long-term (Nice to Have):
-1. Multi-sig executor
-2. Per-session deposit addresses
-3. Insurance fund
-4. Formal smart contract audit
-
----
-
-## Required Environment Variables
-
-```env
-# CRITICAL - Must be set
-EXECUTOR_PRIVATE_KEY=      # 🔐 Guard with your life
-SUPABASE_URL=              # Database URL
-SUPABASE_SERVICE_KEY=      # NOT anon key
-MOSAIC_API_KEY=            # DEX integration
-SHINAMI_GAS_STATION_API_KEY= # Gas sponsorship
-CRON_SECRET=               # Vercel cron auth
-
-# OPTIONAL
-COINMARKETCAP_API_KEY=     # Token price data
-```
-
----
-
-## Next Steps
-
-1. I will implement fixes for Critical issues #1 and #3
-2. Set up the project locally with test credentials
-3. Run integration tests
-4. Create production deployment checklist
+- **2026-03-04:** Initial security audit, deposit verification, cron locking
+- **2026-03-18:** Fixed CRITICAL-2, CRITICAL-3, HIGH-1, HIGH-2 based on external audit

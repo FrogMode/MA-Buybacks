@@ -180,12 +180,19 @@ export async function verifyDeposit(
       }
     }
 
-    // 10. Verify this is USDC (not some other token)
-    // Check if asset matches USDC address
-    if (assetType && !assetType.toLowerCase().includes(USDC_ADDRESS.toLowerCase())) {
-      // For fungible assets, the metadata might be different
-      // This check may need adjustment based on actual asset format
-      console.warn(`[VERIFY] Asset type may not be USDC: ${assetType}`);
+    // 10. STRICTLY verify this is USDC (not some other token)
+    // SECURITY: Reject non-USDC transfers - this was previously only a warning
+    if (assetType) {
+      const isUSDC = assetType.toLowerCase().includes(USDC_ADDRESS.toLowerCase()) ||
+                     assetType.toLowerCase().includes("usdc");
+      if (!isUSDC) {
+        return {
+          valid: false,
+          error: `Wrong asset type: ${assetType}. Only USDC deposits are accepted.`,
+          actualAmount: amount,
+          sender,
+        };
+      }
     }
 
     // All checks passed

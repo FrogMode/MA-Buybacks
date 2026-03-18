@@ -327,17 +327,53 @@ export async function executeSwap(
 
   console.log(`[EXECUTOR] Swap complete: ${swapTxHash}`);
 
-  // 3. Transfer MOVE to user (also sponsored)
+  // 3. SECURITY: Get ACTUAL on-chain output, not quoted value
+  // This prevents accounting errors from slippage/fees
+  let actualMoveReceived = expectedMoveOut;
+  try {
+    const swapTx = await aptos.getTransactionByHash({ transactionHash: swapTxHash });
+    const events = (swapTx as any)?.events || [];
+    
+    // Look for deposit events to executor's account
+    for (const event of events) {
+      const eventType = event.type || "";
+      if ((eventType.includes("DepositEvent") || eventType.includes("Deposit")) &&
+          event.data?.amount) {
+        // This is likely the MOVE deposit to our account
+        const rawAmount = parseInt(event.data.amount, 10);
+        if (rawAmount > 0) {
+          actualMoveReceived = rawAmount / 1e8; // MOVE has 8 decimals
+          console.log(`[EXECUTOR] Actual MOVE received from events: ${actualMoveReceived}`);
+          break;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn(`[EXECUTOR] Could not read actual output from tx, using quote: ${error}`);
+    // Fall back to quoted amount if we can't read the tx
+  }
+
+  // 4. Transfer MOVE to user (also sponsored)
   // Keep a tiny buffer (0.1%) in case of rounding
-  const transferAmount = expectedMoveOut * 0.999;
-  const transferTxHash = await transferMoveToUser(userAddress, transferAmount);
+  const transferAmount = actualMoveReceived * 0.999;
+  
+  let transferTxHash: string;
+  try {
+    transferTxHash = await transferMoveToUser(userAddress, transferAmount);
+  } catch (transferError) {
+    // CRITICAL: Swap succeeded but transfer failed
+    // We need to handle this gracefully - the MOVE is in executor wallet
+    console.error(`[EXECUTOR] CRITICAL: Swap succeeded but transfer failed!`, transferError);
+    console.error(`[EXECUTOR] ${actualMoveReceived} MOVE stuck in executor wallet for user ${userAddress}`);
+    throw new Error(`Transfer failed after successful swap. Please contact support. Swap tx: ${swapTxHash}`);
+  }
 
   console.log(`[EXECUTOR] Full execution complete - Swap: ${swapTxHash}, Transfer: ${transferTxHash}`);
 
   return {
     swapTxHash,
     transferTxHash,
-    moveReceived: expectedMoveOut,
+    moveReceived: actualMoveReceived, // Return ACTUAL amount, not quote
   };
 }
 
